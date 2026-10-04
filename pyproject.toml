@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lottery-intelligence-platform"
+version = "0.1.0"
+description = "Data foundation for a reproducible lottery research platform"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3==1.43.96",
+    "psycopg[binary]==3.3.5",
+    "python-dotenv==1.1.1",
+    "duckdb==1.5.5",
+]
+
+[project.scripts]
+lottery-backfill = "lottery_intelligence_platform.backfill_cli:main"
+lottery-dataset-snapshot = "lottery_intelligence_platform.dataset_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
