@@ -13,9 +13,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from datetime import date, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
@@ -67,6 +69,40 @@ ROUTES: dict[str, str] = {
                meets_power_threshold
         FROM research.draw_type_power ORDER BY settled_draws DESC
     """,
+    "/api/draws": """
+        SELECT d.draw_id, dt.display_name AS draw_type, d.scheduled_date,
+               d.status, v.validation_status,
+               (SELECT jsonb_agg(n.number ORDER BY n.position)
+                FROM core.draw_numbers n
+                WHERE n.draw_version_id = v.draw_version_id
+                  AND n.number_role = 'WINNING') AS winning_numbers
+        FROM core.draws d
+        JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+        LEFT JOIN LATERAL (
+            SELECT draw_version_id, validation_status FROM core.draw_versions
+            WHERE draw_id = d.draw_id ORDER BY version_number DESC LIMIT 1
+        ) v ON true
+        WHERE d.status IN ('FROZEN', 'SETTLED', 'EXPECTED')
+        ORDER BY d.scheduled_date DESC LIMIT 100
+    """,
+    "/api/datasets": """
+        SELECT d.code, dv.version_number, dv.cutoff_at,
+               (SELECT count(*) FROM datasets.dataset_members m
+                WHERE m.dataset_version_id = dv.dataset_version_id) AS members,
+               dv.manifest_sha256
+        FROM datasets.dataset_versions dv
+        JOIN datasets.datasets d ON d.dataset_id = dv.dataset_id
+        ORDER BY dv.created_at DESC
+    """,
+    "/api/models": """
+        SELECT mv.code, mv.version, mv.family, mv.definition,
+               (SELECT count(*) FROM research.predictions p
+                WHERE p.model_version_id = mv.model_version_id) AS predictions,
+               (SELECT count(*) FROM research.prediction_outcomes o
+                JOIN research.predictions p ON p.prediction_id = o.prediction_id
+                WHERE p.model_version_id = mv.model_version_id) AS settled
+        FROM research.model_versions mv ORDER BY mv.code, mv.version
+    """,
     "/api/findings": """
         SELECT f.finding_id, h.title AS hypothesis, f.status, f.conclusion,
                f.evidence, f.created_at
@@ -103,6 +139,7 @@ PREDICTIONS_SQL = """
 
 class ApiHandler(BaseHTTPRequestHandler):
     dsn: str = DEFAULT_DSN
+    token: str | None = None  # when set, Bearer auth is required
 
     def _query(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         with psycopg.connect(self.dsn, autocommit=True) as conn:
@@ -120,7 +157,20 @@ class ApiHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
+        if self.token is not None:
+            auth = self.headers.get("Authorization", "")
+            if auth != f"Bearer {self.token}":
+                self._send({"error": "unauthorized"}, 401)
+                return
         try:
+            if url.path in ("/", "/console"):
+                html = (Path(__file__).with_name("console.html")).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(html)))
+                self.end_headers()
+                self.wfile.write(html)
+                return
             if url.path == "/api/predictions":
                 qs = parse_qs(url.query)
                 status = (qs.get("status") or [None])[0]
@@ -152,6 +202,10 @@ def main() -> int:
     parser.add_argument("--dsn", default=os.environ.get("LOTTERY_DB_DSN", DEFAULT_DSN))
     args = parser.parse_args()
     ApiHandler.dsn = args.dsn
+    ApiHandler.token = os.environ.get("LOTTERY_API_TOKEN") or None
+    if ApiHandler.token is None and args.host != "127.0.0.1":
+        print("warning: no LOTTERY_API_TOKEN set on a non-loopback bind",
+              file=sys.stderr)
     server = ThreadingHTTPServer((args.host, args.port), ApiHandler)
     print(f"listening on http://{args.host}:{args.port}")
     server.serve_forever()

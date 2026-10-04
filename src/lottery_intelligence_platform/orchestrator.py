@@ -254,6 +254,73 @@ def _run_script(connection: Any, run: JobRun, script: str) -> Mapping[str, Any]:
     return {"script": script, "stdout": completed.stdout[-2000:]}
 
 
+def handle_audit_data_quality(connection: Any, run: JobRun) -> Mapping[str, Any]:
+    """Daily data-quality sweep: anomaly rollup + collection success rate.
+
+    Alerts on missing results (EXPECTED draws past their date without a valid
+    version) and on structural anomalies (wrong count, duplicates, range).
+    """
+    # Stale pending predictions: projected target dates that never became real
+    # draws would stay PENDING forever and inflate denominators. Past a 2-day
+    # grace (collection lag) with no draw row, mark INVALID + audit.
+    stale = connection.execute(
+        """UPDATE research.predictions p SET status = 'INVALID'
+           WHERE p.status = 'PENDING'
+             AND p.scheduled_date < CURRENT_DATE - 2
+             AND NOT EXISTS (
+                 SELECT 1 FROM core.draws d
+                 WHERE d.draw_type_id = p.draw_type_id
+                   AND d.scheduled_date = p.scheduled_date)
+           RETURNING p.prediction_id"""
+    ).fetchall()
+    if stale:
+        emit_event(
+            connection, "STALE_PREDICTIONS_INVALIDATED",
+            {"count": len(stale),
+             "prediction_ids": [str(r[0]) for r in stale]},
+            job_run_id=run.job_run_id,
+        )
+        _alert(connection, "STALE_PREDICTIONS", "WARNING",
+               {"count": len(stale)})
+    anomalies = connection.execute(
+        """SELECT draw_type, draws, missing_result, wrong_count,
+                  duplicate_number, number_out_of_range, anomalous
+           FROM core.draw_quality_summary WHERE anomalous > 0"""
+    ).fetchall()
+    missing = sum(r[2] for r in anomalies)
+    structural = sum(r[6] - r[2] for r in anomalies)
+    coll = connection.execute(
+        """SELECT source, day, runs, succeeded, success_rate, duplicate_rate
+           FROM ingestion.collection_quality
+           WHERE day >= CURRENT_DATE - 1 ORDER BY day DESC"""
+    ).fetchall()
+    report = {
+        "anomalous_draw_types": len(anomalies),
+        "missing_results": missing,
+        "structural_anomalies": structural,
+        "stale_invalidated": len(stale),
+        "collection_days": [
+            {"source": r[0], "day": str(r[1]), "runs": r[2],
+             "succeeded": r[3], "success_rate": float(r[4] or 0),
+             "duplicate_rate": float(r[5] or 0)}
+            for r in coll
+        ],
+    }
+    emit_event(connection, "DATA_QUALITY_REPORT", report, job_run_id=run.job_run_id)
+    if missing:
+        _alert(connection, "MISSING_DRAWS", "WARNING",
+               {"count": missing, "draw_types": [r[0] for r in anomalies if r[2]]})
+    if structural:
+        _alert(connection, "DRAW_QUALITY_ANOMALY", "WARNING",
+               {"count": structural,
+                "detail": [
+                    {"draw_type": r[0], "wrong_count": r[3],
+                     "duplicate": r[4], "out_of_range": r[5]}
+                    for r in anomalies if r[6] - r[2] > 0
+                ]})
+    return report
+
+
 def handle_backup_postgresql(connection: Any, run: JobRun) -> Mapping[str, Any]:
     return _run_script(connection, run, "backup_postgresql.sh")
 
@@ -272,6 +339,7 @@ HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "generate_predictions": handle_generate_predictions,
     "daily_research_summary": handle_daily_research_summary,
     "weekly_research_report": handle_weekly_research_report,
+    "audit_data_quality": handle_audit_data_quality,
     "backup_postgresql": handle_backup_postgresql,
     "backup_raw_storage": handle_backup_raw_storage,
     "verify_backups": handle_verify_backups,

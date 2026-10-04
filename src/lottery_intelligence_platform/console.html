@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Lottery Intelligence Platform — Console</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-monospace, Menlo, monospace; background: #0d1117;
+         color: #c9d1d9; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; color: #58a6ff; margin: 0 0 4px; }
+  h2 { font-size: 13px; color: #8b949e; text-transform: uppercase;
+       letter-spacing: 1px; border-bottom: 1px solid #21262d;
+       padding-bottom: 4px; margin: 28px 0 10px; }
+  .sub { color: #6e7681; font-size: 12px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 10px; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+          padding: 12px; }
+  .card .v { font-size: 22px; color: #f0f6fc; }
+  .card .l { font-size: 11px; color: #8b949e; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { text-align: left; color: #8b949e; font-weight: normal;
+       border-bottom: 1px solid #21262d; padding: 4px 8px; }
+  td { padding: 4px 8px; border-bottom: 1px solid #161b22; }
+  .warn { color: #d29922; } .bad { color: #f85149; } .ok { color: #3fb950; }
+  .scope { font-size: 10px; padding: 1px 5px; border-radius: 3px;
+           background: #1f6feb33; color: #58a6ff; }
+  code { color: #79c0ff; }
+</style>
+</head>
+<body>
+<h1>LOTTERY INTELLIGENCE PLATFORM</h1>
+<div class="sub">console de lecture — scope affiché explicitement ;
+  prospective ≠ backtest ≠ realized</div>
+
+<h2>1 · Data health</h2>
+<div class="grid" id="health"></div>
+
+<h2>2 · Couverture prospective</h2>
+<table id="coverage"><tr><th>statut</th><th>motif</th><th>n</th></tr></table>
+
+<h2>3 · Puissance par type de tirage</h2>
+<table id="power"></table>
+
+<h2>4 · Métriques prospectives <span class="scope">PROSPECTIVE / REALIZED</span></h2>
+<table id="metrics"></table>
+
+<h2>5 · Prédictions récentes</h2>
+<table id="predictions"></table>
+
+<h2>6 · Outcomes réalisés <span class="scope">REALIZED</span></h2>
+<table id="outcomes"></table>
+
+<h2>7 · Findings (mémoire recherche)</h2>
+<table id="findings"></table>
+
+<script>
+const qs = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const j = async p => (await fetch(p)).json().then(r => r.data ?? r);
+
+(async () => {
+  const h = await j('/api/health');
+  qs('#health').innerHTML = [
+    ['alertes ouvertes', h.open_alerts, h.open_alerts > 0 ? 'bad' : 'ok'],
+    ['prédictions en vol', h.pending_predictions, ''],
+    ['prédictions scorées', h.scored_predictions, ''],
+    ['runs jobs 24h', h.runs_24h, ''],
+    ['échecs 24h', h.failed_24h, h.failed_24h > 0 ? 'bad' : 'ok'],
+    ['dernier run', (h.last_run || '').slice(11, 19), ''],
+  ].map(([l, v, c]) => `<div class="card"><div class="v ${c}">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('');
+
+  const cov = await j('/api/prospective/coverage');
+  qs('#coverage').innerHTML += cov.map(r =>
+    `<tr><td>${esc(r.status)}</td><td>${esc(r.reason ?? '—')}</td><td>${r.n}</td></tr>`).join('');
+
+  const pw = await j('/api/power');
+  qs('#power').innerHTML = '<tr><th>type</th><th>tirages</th><th>depuis</th><th>puissance</th></tr>' +
+    pw.map(r => `<tr><td>${esc(r.draw_type)}</td><td>${r.settled_draws}</td>` +
+      `<td>${esc(r.first_draw ?? '—')}</td>` +
+      `<td class="${r.meets_power_threshold ? 'ok' : 'warn'}">${r.meets_power_threshold ? 'ok' : 'low'}</td></tr>`).join('');
+
+  const me = await j('/api/prospective/metrics');
+  const settled = me.filter(r => r.settled > 0 || r.absent_total > 0 || r.pending > 0);
+  qs('#metrics').innerHTML = '<tr><th>modèle</th><th>type</th><th>éligibles</th><th>générées</th><th>scorées</th><th>taux</th><th>hits∅</th><th>net T2</th><th>hist</th><th></th></tr>' +
+    settled.map(r => `<tr><td>${esc(r.model_code)}</td><td>${esc(r.draw_type)}</td>` +
+      `<td>${r.eligible_pairs}</td><td>${r.generated}</td><td>${r.settled}</td>` +
+      `<td>${r.settlement_rate ?? '—'}</td><td>${r.mean_hits ?? '—'}</td>` +
+      `<td>${r.turbo?.turbo_2?.net ?? '—'}</td>` +
+      `<td>${r.historical_draws}</td>` +
+      `<td>${r.low_power ? '<span class="warn">low-power</span>' : ''}</td></tr>`).join('');
+
+  const pr = await j('/api/predictions?limit=15');
+  qs('#predictions').innerHTML = '<tr><th>date</th><th>type</th><th>modèle</th><th>numéros</th><th>statut</th></tr>' +
+    (pr.predictions ?? pr).map(r => `<tr><td>${esc(r.scheduled_date)}</td>` +
+      `<td>${esc(r.draw_type)}</td><td>${esc(r.model_code)}</td>` +
+      `<td><code>${esc(JSON.stringify(r.predicted_numbers))}</code></td>` +
+      `<td class="${r.status === 'SCORED' ? 'ok' : r.status === 'INVALID' ? 'bad' : ''}">${esc(r.status)}</td></tr>`).join('');
+
+  const oc = await j('/api/outcomes');
+  qs('#outcomes').innerHTML = '<tr><th>réglé</th><th>type</th><th>modèle</th><th>hits</th><th>T2</th><th>net</th></tr>' +
+    oc.slice(0, 20).map(r => `<tr><td>${esc((r.settled_at ?? '').slice(0, 16))}</td>` +
+      `<td>${esc(r.draw_type)}</td><td>${esc(r.model_code)}</td><td>${r.hit_count}</td>` +
+      `<td class="${r.turbo?.turbo_2?.hit ? 'ok' : ''}">${r.turbo?.turbo_2?.hit ? 'HIT' : '—'}</td>` +
+      `<td>${r.turbo?.turbo_2?.net ?? '—'}</td></tr>`).join('');
+
+  const fi = await j('/api/findings');
+  qs('#findings').innerHTML = '<tr><th>date</th><th>hypothèse</th><th>verdict</th><th>conclusion</th></tr>' +
+    fi.slice(0, 20).map(r => `<tr><td>${esc((r.created_at ?? '').slice(0, 10))}</td>` +
+      `<td>${esc(r.hypothesis)}</td>` +
+      `<td class="${r.status === 'REJECTED' ? 'bad' : r.status === 'VALIDATED' ? 'ok' : 'warn'}">${esc(r.status)}</td>` +
+      `<td>${esc((r.conclusion ?? '').slice(0, 140))}</td></tr>`).join('');
+})().catch(e => { document.body.innerHTML += `<pre class="bad">${esc(e)}</pre>`; });
+</script>
+</body>
+</html>

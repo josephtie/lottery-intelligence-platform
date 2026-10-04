@@ -50,6 +50,12 @@ DEFAULT_JOB_DEFS: tuple[dict[str, Any], ...] = (
         "config": {},
     },
     {
+        "code": "audit_data_quality",
+        "kind": "MAINTENANCE",
+        "schedule_cron": "45 23 * * *",
+        "config": {},
+    },
+    {
         "code": "backup_postgresql",
         "kind": "BACKUP",
         "schedule_cron": "0 2 * * *",
