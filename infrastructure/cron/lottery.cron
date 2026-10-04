@@ -14,6 +14,10 @@ LOTTERY_REPO=/Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform
 # Settlement pipeline: picks up FROZEN draws, locks + settles predictions.
 */5 * * * * cd /Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform && .venv/bin/python -m lottery_intelligence_platform.orchestrator_cli run-due >> logs/worker.log 2>&1
 
+# Prospective predictions: refresh schedule (best effort) + record model picks
+# for upcoming draws, twice hourly.
+15,45 * * * * cd /Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform && .venv/bin/python -m lottery_intelligence_platform.orchestrator_cli run-job generate_predictions >> logs/predictions.log 2>&1
+
 # Daily research summary at 23:00.
 0 23 * * * cd /Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform && .venv/bin/python -m lottery_intelligence_platform.orchestrator_cli run-job daily_research_summary >> logs/summary.log 2>&1
 

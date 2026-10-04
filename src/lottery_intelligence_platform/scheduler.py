@@ -32,6 +32,12 @@ DEFAULT_JOB_DEFS: tuple[dict[str, Any], ...] = (
         "config": {},
     },
     {
+        "code": "generate_predictions",
+        "kind": "PIPELINE",
+        "schedule_cron": "15,45 * * * *",
+        "config": {"stake": 100},
+    },
+    {
         "code": "daily_research_summary",
         "kind": "REPORT",
         "schedule_cron": "0 23 * * *",

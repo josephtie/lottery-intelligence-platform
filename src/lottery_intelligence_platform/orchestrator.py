@@ -17,9 +17,11 @@ from lottery_intelligence_platform.backfill import BackfillWindow, collect_resul
 from lottery_intelligence_platform.catalog import LotoBonheurCatalog, ensure_lotobonheur_catalog
 from lottery_intelligence_platform.collectors.lotobonheur import (
     LotobonheurResultCollector,
+    LotobonheurScheduleCollector,
     ResultValidationRules,
 )
 from lottery_intelligence_platform.draw_registry import DrawRegistry
+from lottery_intelligence_platform.prediction_generation import generate_predictions
 from lottery_intelligence_platform.storage import raw_object_store_from_environment
 from lottery_intelligence_platform.scheduler import (
     JobRun,
@@ -134,6 +136,41 @@ def handle_settle_pending_draws(connection: Any, run: JobRun) -> Mapping[str, An
     return counts
 
 
+def handle_generate_predictions(connection: Any, run: JobRun) -> Mapping[str, Any]:
+    """Record prospective predictions for upcoming draws.
+
+    Best effort: tries to refresh the official schedule first so predictions
+    target real EXPECTED draws; falls back to recently active draw types.
+    """
+    stake = float(run.details.get("stake") or 100)
+    catalog = _resolve_catalog(connection, BackfillWindow.trailing_months(1))
+    try:
+        raw_store = raw_object_store_from_environment()
+        schedule_collector = LotobonheurScheduleCollector()
+        batch = schedule_collector.collect(connection, raw_store, source_id=catalog.source_id)
+        registry = DrawRegistry(
+            connection,
+            game_id=catalog.game_id,
+            game_version_id=catalog.game_version_id,
+            source_id=catalog.source_id,
+            auto_create_draw_types=True,
+        )
+        registry.register_schedule_batch(batch)
+        emit_event(connection, "SCHEDULE_COLLECTED", {"observations": len(batch.validation.observations)}, job_run_id=run.job_run_id)
+    except Exception as exc:  # noqa: BLE001 - schedule is a best-effort input
+        emit_event(connection, "SCHEDULE_COLLECT_FAILED", {"error": str(exc)[:500]}, job_run_id=run.job_run_id)
+        _alert(connection, "SCHEDULE_COLLECT_FAILED", "WARNING", {"error": str(exc)[:500]})
+
+    result = generate_predictions(connection, stake=stake)
+    emit_event(
+        connection, "PREDICTIONS_GENERATED",
+        {"targets": result.targets, "created": result.created,
+         "reused": result.reused, "by_model": result.by_model},
+        job_run_id=run.job_run_id,
+    )
+    return {"targets": result.targets, "created": result.created, "reused": result.reused}
+
+
 def handle_daily_research_summary(connection: Any, run: JobRun) -> Mapping[str, Any]:
     row = connection.execute(
         """SELECT
@@ -209,6 +246,7 @@ def handle_verify_backups(connection: Any, run: JobRun) -> Mapping[str, Any]:
 HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "collect_results": handle_collect_results,
     "settle_pending_draws": handle_settle_pending_draws,
+    "generate_predictions": handle_generate_predictions,
     "daily_research_summary": handle_daily_research_summary,
     "weekly_research_report": handle_weekly_research_report,
     "backup_postgresql": handle_backup_postgresql,
