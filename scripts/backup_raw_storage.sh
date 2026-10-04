@@ -16,7 +16,24 @@ if command -v aws >/dev/null 2>&1; then
 elif command -v mc >/dev/null 2>&1; then
   mc mirror "local/${BUCKET}" "$BACKUP_DIR/${STAMP}/"
 else
-  echo "no s3 client available (aws or mc required)" >&2
-  exit 1
+  # boto3 fallback — always available in the project venv.
+  .venv/bin/python - "$BUCKET" "$BACKUP_DIR/${STAMP}/" <<'PY'
+import os, sys
+from pathlib import Path
+sys.path.insert(0, "src")
+from lottery_intelligence_platform.storage import s3_client_from_environment
+
+bucket, dest = sys.argv[1], Path(sys.argv[2])
+client = s3_client_from_environment()
+count = 0
+paginator = client.get_paginator("list_objects_v2")
+for page in paginator.paginate(Bucket=bucket):
+    for obj in page.get("Contents", []):
+        target = dest / obj["Key"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        client.download_file(bucket, obj["Key"], str(target))
+        count += 1
+print(f"{count} objects mirrored")
+PY
 fi
 echo "raw backup written: $BACKUP_DIR/${STAMP}/"

@@ -3,6 +3,7 @@
 # Installed via: crontab infrastructure/cron/lottery.cron
 
 CRON_TZ=Africa/Abidjan
+PATH=/usr/local/bin:/usr/bin:/bin
 PYTHONPATH=/Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform/src
 LOTTERY_REPO=/Users/macbookpro2019/IdeaProjects/lottery-intelligence-platform
 
