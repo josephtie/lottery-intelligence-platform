@@ -58,23 +58,62 @@ def insert_prediction(connection, *, draw_type_id, scheduled_date, numbers,
 class SettlementPipelineTests(unittest.TestCase):
     def setUp(self):
         self.connection = psycopg.connect(TEST_DATABASE_URL)
-        self.draw_id, self.draw_type_id, self.draw_date, self.draw_status = self.connection.execute(
-            """SELECT d.draw_id, d.draw_type_id, d.scheduled_date, d.status
+        # Production state evolves (draws settle); build a synthetic FROZEN
+        # draw per test inside its rollback transaction instead.
+        row = self.connection.execute(
+            """SELECT d.draw_type_id, d.game_version_id, d.game_id,
+                      dv.source_id, dv.raw_object_id, d.scheduled_date
                FROM core.draws d
-               WHERE d.status IN ('FROZEN', 'CONFIRMED')
-                 AND EXISTS (
-                     SELECT 1 FROM core.draw_versions dv
-                     WHERE dv.draw_id = d.draw_id AND dv.validation_status = 'VALID'
-                 )
+               JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+               WHERE dv.validation_status = 'VALID'
                ORDER BY d.scheduled_date DESC LIMIT 1"""
         ).fetchone()
+        (self.draw_type_id, self.game_version_id, self.game_id,
+         self.source_id, self.raw_object_id, self.base_date) = row
+        self.draw_date = self.base_date + timedelta(days=3650)
 
     def tearDown(self):
         self.connection.close()
 
+    def _new_draw(self, numbers=(10, 20, 30, 40, 50), status="FROZEN",
+                  observed_at="2020-01-01", scheduled_date=None,
+                  with_result=True):
+        """Insert a synthetic draw + VALID version + ordered numbers.
+        Must be called inside a rollback transaction."""
+        draw_id = uuid4()
+        self.connection.execute(
+            """INSERT INTO core.draws
+               (draw_id, game_id, game_version_id, draw_type_id,
+                scheduled_date, scheduled_sequence, status)
+               VALUES (%s, %s, %s, %s, %s, 9, %s)""",
+            (draw_id, self.game_id, self.game_version_id, self.draw_type_id,
+             scheduled_date or self.draw_date, status),
+        )
+        if not with_result:
+            return draw_id, None
+        version_id = uuid4()
+        self.connection.execute(
+            """INSERT INTO core.draw_versions
+               (draw_version_id, draw_id, version_number, source_id, raw_object_id,
+                payload_sha256, result_observed_at, validated_at, confirmed_at,
+                validation_status)
+               VALUES (%s, %s, 1, %s, %s, repeat('a', 64), %s, %s, %s, 'VALID')""",
+            (version_id, draw_id, self.source_id, self.raw_object_id,
+             observed_at, observed_at, observed_at),
+        )
+        for pos, num in enumerate(numbers, start=1):
+            self.connection.execute(
+                """INSERT INTO core.draw_numbers
+                   (draw_version_id, number_role, position, number)
+                   VALUES (%s, 'WINNING', %s, %s)""",
+                (version_id, pos, num),
+            )
+        return draw_id, version_id
+
     # Spec 1/4/6: settlement is idempotent — a second run cannot double-settle.
     def test_double_settle_is_noop(self):
         with rollback_transaction(self.connection):
+            self.draw_id, _ = self._new_draw()
             first = settle_draw(self.connection, self.draw_id)
             self.assertEqual(first.status, "SETTLED")
             second = settle_draw(self.connection, self.draw_id)
@@ -96,18 +135,10 @@ class SettlementPipelineTests(unittest.TestCase):
     # Spec: PENDING -> LOCKED -> SCORED with real comparison + positional/turbo.
     def test_pending_prediction_locks_scores_with_outcome(self):
         with rollback_transaction(self.connection):
-            winning = [
-                r[0] for r in self.connection.execute(
-                    """SELECT number FROM core.draw_numbers dn
-                       JOIN core.draw_versions dv ON dv.draw_version_id = dn.draw_version_id
-                       WHERE dv.draw_id = %s AND dn.number_role = 'WINNING'
-                       ORDER BY dn.position""",
-                    (self.draw_id,),
-                ).fetchall()
-            ]
+            self.draw_id, _ = self._new_draw(numbers=(31, 46, 7, 12, 88))
             prediction_id = insert_prediction(
                 self.connection, draw_type_id=self.draw_type_id,
-                scheduled_date=self.draw_date, numbers=winning[:2],
+                scheduled_date=self.draw_date, numbers=[31, 46],
             )
             result = settle_draw(self.connection, self.draw_id)
             self.assertEqual(result.status, "SETTLED")
@@ -132,6 +163,7 @@ class SettlementPipelineTests(unittest.TestCase):
     # Spec: a prediction created after the result was observed is INVALID.
     def test_late_prediction_invalidated_and_audited(self):
         with rollback_transaction(self.connection):
+            self.draw_id, _ = self._new_draw()
             prediction_id = insert_prediction(
                 self.connection, draw_type_id=self.draw_type_id,
                 scheduled_date=self.draw_date, numbers=[1, 2],
@@ -153,19 +185,7 @@ class SettlementPipelineTests(unittest.TestCase):
     # Spec 3: no valid result -> no settlement.
     def test_draw_without_valid_result_is_skipped(self):
         with rollback_transaction(self.connection):
-            new_draw_id = uuid4()
-            game_version_id, game_id = self.connection.execute(
-                "SELECT game_version_id, game_id FROM core.draws WHERE draw_id = %s",
-                (self.draw_id,),
-            ).fetchone()
-            self.connection.execute(
-                """INSERT INTO core.draws
-                   (draw_id, game_id, game_version_id, draw_type_id,
-                    scheduled_date, scheduled_sequence, status)
-                   VALUES (%s, %s, %s, %s, %s, 1, 'FROZEN')""",
-                (new_draw_id, game_id, game_version_id, self.draw_type_id,
-                 self.draw_date + timedelta(days=3650)),
-            )
+            new_draw_id, _ = self._new_draw(with_result=False)
             result = settle_draw(self.connection, new_draw_id)
             self.assertEqual(result.status, "NO_VALID_RESULT")
             self.assertEqual(
@@ -180,7 +200,7 @@ class SettlementPipelineTests(unittest.TestCase):
         with rollback_transaction(self.connection):
             prediction_id = insert_prediction(
                 self.connection, draw_type_id=self.draw_type_id,
-                scheduled_date=self.draw_date + timedelta(days=365),
+                scheduled_date=self.draw_date,
                 numbers=[5, 6],
             )
             self.connection.execute(
@@ -216,42 +236,7 @@ class SettlementPipelineTests(unittest.TestCase):
     # Spec 9/10: a draw with no predictions and no strategy still settles.
     def test_draw_without_predictions_settles_cleanly(self):
         with rollback_transaction(self.connection):
-            # use a draw date guaranteed to have zero predictions
-            new_draw_id = uuid4()
-            game_version_id, game_id = self.connection.execute(
-                "SELECT game_version_id, game_id FROM core.draws WHERE draw_id = %s",
-                (self.draw_id,),
-            ).fetchone()
-            source_id, raw_object_id = self.connection.execute(
-                """SELECT source_id, raw_object_id FROM core.draw_versions
-                   WHERE draw_id = %s LIMIT 1""",
-                (self.draw_id,),
-            ).fetchone()
-            new_version_id = uuid4()
-            self.connection.execute(
-                """INSERT INTO core.draws
-                   (draw_id, game_id, game_version_id, draw_type_id,
-                    scheduled_date, scheduled_sequence, status)
-                   VALUES (%s, %s, %s, %s, %s, 9, 'FROZEN')""",
-                (new_draw_id, game_id, game_version_id, self.draw_type_id,
-                 self.draw_date + timedelta(days=3650)),
-            )
-            self.connection.execute(
-                """INSERT INTO core.draw_versions
-                   (draw_version_id, draw_id, version_number, source_id, raw_object_id,
-                    payload_sha256, result_observed_at, validated_at, confirmed_at,
-                    validation_status)
-                   VALUES (%s, %s, 1, %s, %s,
-                    repeat('a', 64), '2000-01-01', '2000-01-01', '2000-01-01', 'VALID')""",
-                (new_version_id, new_draw_id, source_id, raw_object_id),
-            )
-            for pos, num in enumerate([10, 20, 30, 40, 50], start=1):
-                self.connection.execute(
-                    """INSERT INTO core.draw_numbers
-                       (draw_version_id, number_role, position, number)
-                       VALUES (%s, 'WINNING', %s, %s)""",
-                    (new_version_id, pos, num),
-                )
+            new_draw_id, _ = self._new_draw(numbers=(10, 20, 30, 40, 50))
             result = settle_draw(self.connection, new_draw_id)
             self.assertEqual(result.status, "SETTLED")
             self.assertEqual(result.predictions_scored, 0)
@@ -259,6 +244,7 @@ class SettlementPipelineTests(unittest.TestCase):
     # Spec 10: prediction without a strategy scores without strategy settlement.
     def test_prediction_without_strategy_no_strategy_settlement(self):
         with rollback_transaction(self.connection):
+            self.draw_id, _ = self._new_draw()
             prediction_id = insert_prediction(
                 self.connection, draw_type_id=self.draw_type_id,
                 scheduled_date=self.draw_date, numbers=[70, 80],
@@ -282,20 +268,27 @@ class SettlementPipelineTests(unittest.TestCase):
     # triggers LEAKAGE_DETECTED.
     def test_dataset_leakage_invalidates(self):
         with rollback_transaction(self.connection):
-            dataset_version_id = self.connection.execute(
-                """SELECT dv.dataset_version_id FROM datasets.dataset_versions dv
-                   WHERE EXISTS (
-                       SELECT 1 FROM datasets.dataset_members m
-                       JOIN core.draw_versions v ON v.draw_version_id = m.draw_version_id
-                       JOIN core.draws d ON d.draw_id = v.draw_id
-                       WHERE m.dataset_version_id = dv.dataset_version_id
-                         AND d.scheduled_date >= %s
-                   ) LIMIT 1""",
-                (self.draw_date,),
-            ).fetchone()
-            if dataset_version_id is None:
-                self.skipTest("no dataset version with late members")
-            dataset_version_id = dataset_version_id[0]
+            # the settled draw sits at base_date; build a dataset_version that
+            # already contains a member draw on/after the prediction target.
+            self.draw_id, version_id = self._new_draw(scheduled_date=self.base_date)
+            dataset_id = self.connection.execute(
+                "SELECT dataset_id FROM datasets.datasets LIMIT 1"
+            ).fetchone()[0]
+            dataset_version_id = uuid4()
+            self.connection.execute(
+                """INSERT INTO datasets.dataset_versions
+                   (dataset_version_id, dataset_id, version_number, cutoff_at,
+                    schema_version, code_version, manifest, manifest_sha256)
+                   VALUES (%s, %s, 9000, '2030-01-01', 'test', 'test', '{}',
+                    repeat('c', 64))""",
+                (dataset_version_id, dataset_id),
+            )
+            self.connection.execute(
+                """INSERT INTO datasets.dataset_members
+                   (dataset_version_id, draw_version_id, ordinal)
+                   VALUES (%s, %s, 1)""",
+                (dataset_version_id, version_id),
+            )
             prediction_id = uuid4()
             self.connection.execute(
                 """INSERT INTO research.predictions
@@ -305,7 +298,7 @@ class SettlementPipelineTests(unittest.TestCase):
                        %s,
                        (SELECT model_version_id FROM research.model_versions LIMIT 1),
                        %s, %s, '{11,22}', '2000-01-01', %s)""",
-                (prediction_id, self.draw_type_id, self.draw_date, dataset_version_id),
+                (prediction_id, self.draw_type_id, self.base_date, dataset_version_id),
             )
             settle_draw(self.connection, self.draw_id)
             self.assertEqual(

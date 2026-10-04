@@ -21,7 +21,10 @@ from lottery_intelligence_platform.collectors.lotobonheur import (
     ResultValidationRules,
 )
 from lottery_intelligence_platform.draw_registry import DrawRegistry
-from lottery_intelligence_platform.prediction_generation import generate_predictions
+from lottery_intelligence_platform.prediction_generation import (
+    ensure_default_cohort,
+    generate_predictions,
+)
 from lottery_intelligence_platform.storage import raw_object_store_from_environment
 from lottery_intelligence_platform.scheduler import (
     JobRun,
@@ -142,7 +145,6 @@ def handle_generate_predictions(connection: Any, run: JobRun) -> Mapping[str, An
     Best effort: tries to refresh the official schedule first so predictions
     target real EXPECTED draws; falls back to recently active draw types.
     """
-    stake = float(run.details.get("stake") or 100)
     catalog = _resolve_catalog(connection, BackfillWindow.trailing_months(1))
     try:
         raw_store = raw_object_store_from_environment()
@@ -161,14 +163,20 @@ def handle_generate_predictions(connection: Any, run: JobRun) -> Mapping[str, An
         emit_event(connection, "SCHEDULE_COLLECT_FAILED", {"error": str(exc)[:500]}, job_run_id=run.job_run_id)
         _alert(connection, "SCHEDULE_COLLECT_FAILED", "WARNING", {"error": str(exc)[:500]})
 
-    result = generate_predictions(connection, stake=stake)
+    ensure_default_cohort(connection)
+    result = generate_predictions(connection)
     emit_event(
         connection, "PREDICTIONS_GENERATED",
         {"targets": result.targets, "created": result.created,
-         "reused": result.reused, "by_model": result.by_model},
+         "reused": result.reused, "failed": result.failed,
+         "by_model": result.by_model},
         job_run_id=run.job_run_id,
     )
-    return {"targets": result.targets, "created": result.created, "reused": result.reused}
+    return {
+        "targets": result.targets, "created": result.created,
+        "reused": result.reused, "failed": result.failed,
+        "ineligible": result.ineligible,
+    }
 
 
 def handle_daily_research_summary(connection: Any, run: JobRun) -> Mapping[str, Any]:

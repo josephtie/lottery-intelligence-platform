@@ -8,6 +8,7 @@ import psycopg
 
 from lottery_intelligence_platform.prediction_generation import (
     GENERATOR_CODES,
+    ensure_default_cohort,
     generate_predictions,
     pick_top_k,
 )
@@ -31,23 +32,46 @@ def rollback_transaction(connection):
 
 @unittest.skipUnless(TEST_DATABASE_URL, "set LOTTERY_TEST_DATABASE_URL to run PostgreSQL integration tests")
 class PredictionGenerationTests(unittest.TestCase):
-    def setUp(self):
-        self.connection = psycopg.connect(TEST_DATABASE_URL)
-
     def tearDown(self):
         self.connection.close()
 
+    def setUp(self):
+        self.connection = psycopg.connect(TEST_DATABASE_URL)
+        ensure_default_cohort(self.connection)
+
+    def test_cohort_registration_is_idempotent(self):
+        with rollback_transaction(self.connection):
+            first = ensure_default_cohort(self.connection)
+            second = ensure_default_cohort(self.connection)
+            self.assertEqual(first, second)
+            members = self.connection.execute(
+                "SELECT COUNT(*) FROM research.prospective_cohort_members WHERE cohort_version_id = %s",
+                (first,),
+            ).fetchone()[0]
+            self.assertEqual(members, len(GENERATOR_CODES))
+
     def test_generates_for_active_types_and_is_idempotent(self):
         with rollback_transaction(self.connection):
-            result = generate_predictions(self.connection, stake=100)
+            result = generate_predictions(self.connection)
             self.assertGreaterEqual(result.targets, 1)
-            self.assertGreaterEqual(result.created, 1)
+            self.assertGreaterEqual(result.created + result.reused, 1)
             for code in GENERATOR_CODES:
-                self.assertGreaterEqual(result.by_model[code], 1)
+                self.assertGreaterEqual(result.by_model.get(code, 0), 1)
+            # coverage rows exist for every attempted combination
+            coverage = self.connection.execute(
+                "SELECT COUNT(*) FROM research.prediction_coverage WHERE status = 'GENERATED'"
+            ).fetchone()[0]
+            self.assertGreaterEqual(coverage, sum(result.by_model.values()))
 
-            second = generate_predictions(self.connection, stake=100)
+            second = generate_predictions(self.connection)
             self.assertEqual(second.created, 0)
             self.assertEqual(second.reused, result.created + result.reused)
+
+    def test_missing_cohort_returns_empty(self):
+        with rollback_transaction(self.connection):
+            result = generate_predictions(self.connection, cohort_code="no_such_cohort")
+            self.assertIsNone(result.cohort_version_id)
+            self.assertEqual(result.created, 0)
 
     def test_picks_use_only_draws_before_target_date(self):
         with rollback_transaction(self.connection):
@@ -89,7 +113,7 @@ class PredictionGenerationTests(unittest.TestCase):
                     (version_id, pos, num),
                 )
             # picks for a target BEFORE the planted draw must ignore it entirely
-            picks = pick_top_k(self.connection, draw_type_id, max_date)
+            picks = pick_top_k(self.connection, draw_type_id, max_date, {"pick_count": 2}, None)
             expected = [
                 r[0] for r in self.connection.execute(
                     """SELECT number FROM (
@@ -103,14 +127,18 @@ class PredictionGenerationTests(unittest.TestCase):
                 ).fetchall()
             ]
             self.assertEqual(sorted(picks), sorted(expected))
-            self.assertEqual(picks, pick_top_k(self.connection, draw_type_id, max_date))
+            self.assertEqual(
+                picks,
+                pick_top_k(self.connection, draw_type_id, max_date, {"pick_count": 2}, None),
+            )
 
     def test_recorded_predictions_carry_versioning(self):
         with rollback_transaction(self.connection):
-            generate_predictions(self.connection, stake=100)
+            generate_predictions(self.connection)
             row = self.connection.execute(
                 """SELECT mv.code, p.parameters->>'pick_count', p.stake,
-                          p.dataset_version_id IS NOT NULL
+                          p.dataset_version_id IS NOT NULL,
+                          p.parameters->>'cohort_version_id' IS NOT NULL
                    FROM research.predictions p
                    JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
                    WHERE p.parameters->>'generator' IS NOT NULL
@@ -120,6 +148,7 @@ class PredictionGenerationTests(unittest.TestCase):
             self.assertIn(row[0], GENERATOR_CODES)
             self.assertEqual(row[1], "2")
             self.assertEqual(float(row[2]), 100.0)
+            self.assertTrue(row[4])
 
 
 if __name__ == "__main__":
