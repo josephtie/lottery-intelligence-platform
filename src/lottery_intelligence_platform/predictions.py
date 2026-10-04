@@ -25,6 +25,12 @@ def record_prediction(
     scheduled_date: date,
     predicted_numbers: Sequence[int],
     strategy_version_id: UUID | str | None = None,
+    dataset_version_id: UUID | str | None = None,
+    feature_set_version: str | None = None,
+    parameters: Mapping[str, Any] | None = None,
+    candidates: Sequence[Any] | None = None,
+    scores: Sequence[Any] | None = None,
+    stake: float | None = None,
 ) -> Prediction:
     numbers = sorted(set(int(n) for n in predicted_numbers))
     if not numbers:
@@ -35,6 +41,8 @@ def record_prediction(
         raise ValueError("predicted numbers must be in [1, 90]")
     if scheduled_date < date.today():
         raise ValueError("prospective predictions must target today or a future date")
+    if stake is not None and stake < 0:
+        raise ValueError("stake cannot be negative")
 
     with connection.transaction():
         connection.execute(
@@ -52,13 +60,20 @@ def record_prediction(
         inserted = connection.execute(
             """INSERT INTO research.predictions
                (prediction_id, model_version_id, strategy_version_id, draw_type_id,
-                scheduled_date, predicted_numbers)
-               VALUES (%s, %s, %s, %s, %s, %s)
+                scheduled_date, predicted_numbers, dataset_version_id,
+                feature_set_version, parameters, candidates, scores, stake)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (model_version_id, draw_type_id, scheduled_date, predicted_numbers)
                DO NOTHING
                RETURNING prediction_id, status""",
-            (uuid4(), model_version_id, strategy_version_id, draw_type_id,
-             scheduled_date, numbers),
+            (
+                uuid4(), model_version_id, strategy_version_id, draw_type_id,
+                scheduled_date, numbers, dataset_version_id, feature_set_version,
+                Jsonb(dict(parameters or {})),
+                Jsonb(list(candidates)) if candidates is not None else None,
+                Jsonb(list(scores)) if scores is not None else None,
+                stake,
+            ),
         ).fetchone()
         if inserted:
             return Prediction(inserted[0], inserted[1], True)
