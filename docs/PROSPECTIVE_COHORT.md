@@ -39,11 +39,37 @@ Current sealed version: **`prospective_turbo_v1` v1**, effective 2026-10-04:
 
 Reuses `settle_draw`: `prediction_outcomes` (hit_count, positional_hits,
 turbo variants under the official positional rule), `strategy_settlements`
-scope `REALIZED`. Aggregates via `research.prospective_performance` view —
-never mixed with backtest/walk-forward/OOS scopes.
+scope `REALIZED`. Never mixed with backtest/walk-forward/OOS scopes.
+
+Two read layers, both derived — never mutated:
+
+- `research.prospective_performance` (0015): one row per settled prediction
+  (model, draw, hits, positional_hits, turbo metrics).
+- `research.prospective_metrics` (0016): per cohort_version × model ×
+  draw_type — explicit denominators: `eligible_pairs`, `generated`,
+  `missing`, `failed`, `ineligible`, `absent_total`, `pending`, `locked`,
+  `invalid`, `settled`, `settlement_rate = settled/generated`, `mean_hits`,
+  `hits_first_1..5`, and `turbo` JSONB per variant (bets, hits, stake,
+  payout, net, roi). The weekly report reads this view.
+
+A hit is never evidence of profitability; ROI is the economic metric.
+
+## Coverage reconciliation
+
+`_reconcile_coverage` runs at the start of every generation (idempotent):
+
+- predictions matching an ACTIVE cohort member but lacking a coverage row
+  are linked back as `GENERATED` / `reason='reconciled…'`;
+- settled draws inside the cohort window whose pair never produced a
+  prediction are marked `MISSING` / `reason='draw settled before
+  generation evaluated this pair'`.
+
+Silent absence is impossible: every admissible draw×model pair has a row.
 
 ## Verified live
 
 2026-10-04 *Digital Reveil 8h*: 4 predictions generated → result collected →
 locked → scored (outcomes + turbo rows recorded). First realized prospective
-evidence in the ledger.
+evidence in the ledger. Reconciliation healed 4 orphan predictions and
+marked 12 legitimately missed pairs (04/10 draws settled before the first
+cohort run).

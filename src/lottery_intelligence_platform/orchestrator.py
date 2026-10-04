@@ -204,18 +204,33 @@ def handle_daily_research_summary(connection: Any, run: JobRun) -> Mapping[str, 
 
 
 def handle_weekly_research_report(connection: Any, run: JobRun) -> Mapping[str, Any]:
+    """Prospective-only report built from the cohort metrics view.
+
+    Denominators (eligible_pairs, generated, settled) come from the coverage
+    ledger; economics from outcomes settled under the payout-rule version in
+    force at settlement. Backtest/walk-forward metrics are never mixed in.
+    """
     rows = connection.execute(
-        """SELECT mv.model_code, COUNT(*) AS settled,
-                  AVG(o.hit_count) AS mean_hits
-           FROM research.prediction_outcomes o
-           JOIN research.predictions p ON p.prediction_id = o.prediction_id
-           JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
-           WHERE o.settled_at > CURRENT_TIMESTAMP - interval '7 days'
-           GROUP BY mv.model_code"""
+        """SELECT cohort_code, cohort_version, model_code, draw_type,
+                  eligible_pairs, generated, absent_total, settled,
+                  settlement_rate, mean_hits, hits_first_2, turbo
+           FROM research.prospective_metrics
+           ORDER BY cohort_code, model_code, draw_type"""
     ).fetchall()
     report = {
-        "models": [
-            {"model_code": r[0], "settled": r[1], "mean_hits": float(r[2])} for r in rows
+        "scope": "PROSPECTIVE",
+        "cells": [
+            {
+                "cohort": r[0], "cohort_version": r[1],
+                "model_code": r[2], "draw_type": r[3],
+                "eligible_pairs": r[4], "generated": r[5],
+                "absent": r[6], "settled": r[7],
+                "settlement_rate": float(r[8]) if r[8] is not None else None,
+                "mean_hits": float(r[9]) if r[9] is not None else None,
+                "turbo_2_hits": r[10],
+                "turbo": r[11],
+            }
+            for r in rows
         ],
     }
     emit_event(connection, "WEEKLY_REPORT", report, job_run_id=run.job_run_id)

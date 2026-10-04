@@ -329,6 +329,69 @@ def _coverage(
     )
 
 
+def _reconcile_coverage(connection: Any, cohort_version_id: UUID, effective_from: date) -> int:
+    """Heal coverage gaps so every cohort pair has an explicit ledger row.
+
+    Two cases, both idempotent:
+    - predictions matching an active cohort member but lacking a coverage row
+      (recorded before the ledger existed, or a failed coverage write) are
+      linked back as GENERATED/reconciled;
+    - settled/validated draws inside the cohort window whose model pair never
+      produced a prediction nor a coverage row are marked MISSING, so silent
+      absence is impossible.
+    """
+    healed = connection.execute(
+        """INSERT INTO research.prediction_coverage
+               (coverage_id, draw_type_id, scheduled_date, draw_id,
+                model_version_id, cohort_version_id, status, reason, prediction_id)
+           SELECT gen_random_uuid(), p.draw_type_id, p.scheduled_date,
+                  p.target_draw_id, p.model_version_id, %s, 'GENERATED',
+                  'reconciled: prediction predates coverage ledger',
+                  p.prediction_id
+           FROM research.predictions p
+           JOIN research.prospective_cohort_members m
+             ON m.model_version_id = p.model_version_id
+            AND m.cohort_version_id = %s
+            AND m.status = 'ACTIVE'
+            AND (m.draw_type_id IS NULL OR m.draw_type_id = p.draw_type_id)
+           LEFT JOIN research.prediction_coverage cov
+             ON cov.draw_type_id = p.draw_type_id
+            AND cov.scheduled_date = p.scheduled_date
+            AND cov.model_version_id = p.model_version_id
+            AND cov.cohort_version_id = %s
+           WHERE cov.coverage_id IS NULL
+           ON CONFLICT (draw_type_id, scheduled_date, model_version_id, cohort_version_id)
+           DO NOTHING""",
+        (cohort_version_id, cohort_version_id, cohort_version_id),
+    )
+    connection.execute(
+        """INSERT INTO research.prediction_coverage
+               (coverage_id, draw_type_id, scheduled_date, draw_id,
+                model_version_id, cohort_version_id, status, reason)
+           SELECT gen_random_uuid(), d.draw_type_id, d.scheduled_date, d.draw_id,
+                  m.model_version_id, %s, 'MISSING',
+                  'draw settled before generation evaluated this pair'
+           FROM core.draws d
+           JOIN research.prospective_cohort_members m
+             ON m.cohort_version_id = %s
+            AND m.status = 'ACTIVE'
+            AND (m.draw_type_id IS NULL OR m.draw_type_id = d.draw_type_id)
+           LEFT JOIN research.prediction_coverage cov
+             ON cov.draw_type_id = d.draw_type_id
+            AND cov.scheduled_date = d.scheduled_date
+            AND cov.model_version_id = m.model_version_id
+            AND cov.cohort_version_id = %s
+           WHERE cov.coverage_id IS NULL
+             AND d.scheduled_date >= %s
+             AND d.scheduled_date <= CURRENT_DATE
+             AND d.status IN ('FROZEN', 'SETTLED')
+           ON CONFLICT (draw_type_id, scheduled_date, model_version_id, cohort_version_id)
+           DO NOTHING""",
+        (cohort_version_id, cohort_version_id, cohort_version_id, effective_from),
+    )
+    return healed.rowcount or 0
+
+
 def generate_predictions(
     connection: Any,
     *,
@@ -347,13 +410,15 @@ def generate_predictions(
     ).fetchone()
     if cohort is None:
         return GenerationResult(None, 0, 0, 0, 0, 0, {})
-    cohort_version_id = connection.execute(
-        """SELECT cohort_version_id FROM research.prospective_cohort_versions
+    cohort_version_id, effective_from = connection.execute(
+        """SELECT cohort_version_id, effective_from
+           FROM research.prospective_cohort_versions
            WHERE cohort_id = %s ORDER BY version DESC LIMIT 1""",
         (cohort[0],),
-    ).fetchone()[0]
+    ).fetchone()
     definition = _cohort_definition(connection, cohort_version_id)
     members = load_cohort(connection, cohort_version_id)
+    _reconcile_coverage(connection, cohort_version_id, effective_from)
     targets = _targets(connection, today)
     dataset_version_id = _latest_dataset_version(connection)
     stake = float(definition.get("stake", 100))
