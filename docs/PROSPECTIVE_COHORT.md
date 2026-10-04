@@ -84,6 +84,22 @@ exploitable regime — consistent with regime conditioning improving 0/277
 cells. Decision: **no draw-type split, no cohort segmentation**. The cohort
 keeps draw types as atomic units.
 
+## Generation horizon (2026-10-04 update)
+
+`_targets` now unions official `EXPECTED` draws with per-type weekday
+projections over a 7-day horizon: a daily type gets seven future targets, a
+weekly type one. Predictions are recorded days ahead of publication instead
+of hours — the 12 `MISSING` pairs of 2026-10-04 (draws settled before the
+cohort existed) remain the only legitimate misses.
+
+`historical_draws` and `low_power` (< 30 settled draws, per the cohort
+charter) are exposed on every metrics cell via `research.draw_type_power`;
+Digital 7h (2 draws) and Nuit Etoilee (22) are the only flagged types.
+
+Settlement resolves the payout rule temporally: highest `effective_from`
+covering the draw date on its game_version, `VERIFIED_OFFICIAL` preferred,
+game-level fallback for versions carrying no rule.
+
 ## Verified live
 
 2026-10-04 *Digital Reveil 8h*: 4 predictions generated → result collected →

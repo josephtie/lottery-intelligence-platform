@@ -165,9 +165,13 @@ def _dataset_has_leakage(connection: Any, dataset_version_id: UUID, scheduled_da
     return bool(row and row[0] and row[0] >= scheduled_date)
 
 
-def _payout_multipliers(connection: Any, strategy_version_id: UUID | None) -> Mapping[str, float]:
+def _payout_multipliers(
+    connection: Any, strategy_version_id: UUID | None, draw_id: UUID
+) -> Mapping[str, float]:
     """Resolve multipliers from the strategy's payout rule version, falling
-    back to the verified official positional rule."""
+    back to the rule in force on the draw date: highest effective_from that
+    covers the draw's scheduled_date on its game_version, verified official
+    rules preferred over provisional ones."""
     row = None
     if strategy_version_id is not None:
         row = connection.execute(
@@ -180,8 +184,32 @@ def _payout_multipliers(connection: Any, strategy_version_id: UUID | None) -> Ma
         ).fetchone()
     if row is None:
         row = connection.execute(
-            """SELECT rule_definition FROM catalog.payout_rule_versions
-               WHERE version = 'official-turbo-position-2026-10'""",
+            """SELECT prv.rule_definition
+               FROM catalog.payout_rule_versions prv
+               JOIN core.draws d ON d.game_version_id = prv.game_version_id
+               WHERE d.draw_id = %s
+                 AND prv.effective_from <= d.scheduled_date
+                 AND (prv.effective_to IS NULL OR d.scheduled_date <= prv.effective_to)
+               ORDER BY (prv.rule_definition->>'verification_status' = 'VERIFIED_OFFICIAL') DESC,
+                        prv.effective_from DESC
+               LIMIT 1""",
+            (draw_id,),
+        ).fetchone()
+    if row is None:
+        # Game-level fallback: the draw's game_version carries no rule (e.g.
+        # synthetic or newly created version) — take the game's verified rule
+        # covering the draw date, whatever version it was registered under.
+        row = connection.execute(
+            """SELECT prv.rule_definition
+               FROM catalog.payout_rule_versions prv
+               JOIN core.draws d ON d.game_id = prv.game_id
+               WHERE d.draw_id = %s
+                 AND prv.effective_from <= d.scheduled_date
+                 AND (prv.effective_to IS NULL OR d.scheduled_date <= prv.effective_to)
+               ORDER BY (prv.rule_definition->>'verification_status' = 'VERIFIED_OFFICIAL') DESC,
+                        prv.effective_from DESC
+               LIMIT 1""",
+            (draw_id,),
         ).fetchone()
     if row is None:
         return {}
@@ -337,7 +365,7 @@ def settle_draw(
         ).fetchall()
         settlements_by_strategy: dict[UUID, list[dict[str, Any]]] = {}
         multipliers = _payout_multipliers(
-            connection, to_settle[0][2] if to_settle else None
+            connection, to_settle[0][2] if to_settle else None, draw_id
         )
         for prediction_id, predicted, strategy_version_id, stake, created_at in to_settle:
             effective_stake = float(stake) if stake is not None else DEFAULT_TURBO_STAKE

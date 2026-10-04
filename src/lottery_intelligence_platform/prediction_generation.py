@@ -58,6 +58,8 @@ ROLLING_WINDOW = 200
 BAYES_ALPHA = 5.0
 BAYES_MU = 5 / 90
 FALLBACK_ACTIVITY_DAYS = 7
+GENERATION_HORIZON_DAYS = 7
+WEEKDAY_INFERENCE_DAYS = 56
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,7 +280,10 @@ def _latest_dataset_version(connection: Any) -> UUID | None:
 
 def _targets(connection: Any, today: date) -> list[tuple[UUID, date, UUID | None]]:
     """(draw_type_id, scheduled_date, draw_id|None) — scheduled/expected draws
-    first; fallback: recently active types for tomorrow."""
+    over the horizon, unioned with per-type weekday projections so a draw that
+    only appears on the official schedule hours before happening is still
+    covered by a prediction recorded well in advance."""
+    horizon = today + timedelta(days=GENERATION_HORIZON_DAYS)
     rows = connection.execute(
         """SELECT draw_type_id, scheduled_date, draw_id FROM core.draws
            WHERE status IN ('SCHEDULED', 'EXPECTED')
@@ -288,21 +293,41 @@ def _targets(connection: Any, today: date) -> list[tuple[UUID, date, UUID | None
                  WHERE dv.draw_id = draws.draw_id AND dv.validation_status = 'VALID'
              )
            ORDER BY scheduled_date""",
-        (today, today + timedelta(days=7)),
+        (today, horizon),
     ).fetchall()
-    if rows:
-        return [(r[0], r[1], r[2]) for r in rows]
-    tomorrow = today + timedelta(days=1)
-    fallback = connection.execute(
-        """SELECT DISTINCT draw_type_id FROM core.draws
-           WHERE scheduled_date >= %s AND status IN ('FROZEN', 'SETTLED')
-             AND draw_type_id IN (
-                 SELECT DISTINCT draw_type_id FROM core.draws
-                 WHERE scheduled_date = %s OR scheduled_date = %s
-             )""",
-        (today - timedelta(days=FALLBACK_ACTIVITY_DAYS), today - timedelta(days=1), today),
+    targets: dict[tuple[UUID, date], tuple[UUID, date, UUID | None]] = {
+        (r[0], r[1]): (r[0], r[1], r[2]) for r in rows
+    }
+    # Fallback projection: each recently-active type's observed draw weekdays
+    # over the horizon — a weekly type gets one target, a daily type gets
+    # seven. Pairs already covered by an EXPECTED draw are skipped.
+    projected = connection.execute(
+        """WITH active AS (
+               SELECT DISTINCT draw_type_id FROM core.draws
+               WHERE scheduled_date >= %s AND status IN ('FROZEN', 'SETTLED')
+           ),
+           weekdays AS (
+               SELECT draw_type_id,
+                      array_agg(DISTINCT extract(isodow FROM scheduled_date)::int) AS dows
+               FROM core.draws
+               WHERE scheduled_date >= %s AND status IN ('FROZEN', 'SETTLED')
+               GROUP BY draw_type_id
+           )
+           SELECT w.draw_type_id, gs::date
+           FROM weekdays w
+           JOIN active a ON a.draw_type_id = w.draw_type_id
+           CROSS JOIN LATERAL generate_series(%s::date, %s::date, '1 day') gs
+           WHERE extract(isodow FROM gs)::int = ANY(w.dows)
+           ORDER BY gs, w.draw_type_id""",
+        (
+            today - timedelta(days=FALLBACK_ACTIVITY_DAYS),
+            today - timedelta(days=WEEKDAY_INFERENCE_DAYS),
+            today + timedelta(days=1), horizon,
+        ),
     ).fetchall()
-    return [(r[0], tomorrow, None) for r in fallback]
+    for draw_type_id, scheduled_date in projected:
+        targets.setdefault((draw_type_id, scheduled_date), (draw_type_id, scheduled_date, None))
+    return sorted(targets.values(), key=lambda t: (t[1], str(t[0])))
 
 
 def _coverage(

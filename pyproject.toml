@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 lottery-backfill = "lottery_intelligence_platform.backfill_cli:main"
 lottery-dataset-snapshot = "lottery_intelligence_platform.dataset_cli:main"
+lottery-api = "lottery_intelligence_platform.api:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
