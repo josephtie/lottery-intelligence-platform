@@ -66,6 +66,24 @@ A hit is never evidence of profitability; ROI is the economic metric.
 
 Silent absence is impossible: every admissible draw×model pair has a row.
 
+## Change-point review (2026-10-04)
+
+The 22 scan-flagged distribution splits (strongest: Fortune Thursday
+2023-08, Midweek 2022-09/11, Digital 23h 2023-01) were reviewed for cause:
+
+- **No renaming**: every draw type runs continuously since 2020-11.
+- **No structural change**: universe stays 1-90, weekly/daily volumes stable.
+- **No global event**: cross-type chi2 at 2023-08 averages 89 = the null df;
+  only 2-3 types deviate, marginally.
+- **Power artefacts**: Digital 21h/23h flag trivial deviations because
+  n > 16k numbers gives the test extreme sensitivity.
+- **No coverage artefact**: Midweek has one missing Wednesday, not a gap.
+
+Verdict (findings ledger, `INCONCLUSIVE`): small-magnitude drift, no
+exploitable regime — consistent with regime conditioning improving 0/277
+cells. Decision: **no draw-type split, no cohort segmentation**. The cohort
+keeps draw types as atomic units.
+
 ## Verified live
 
 2026-10-04 *Digital Reveil 8h*: 4 predictions generated → result collected →
