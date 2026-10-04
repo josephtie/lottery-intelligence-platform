@@ -14,7 +14,7 @@ from typing import Any, Callable, Mapping
 from zoneinfo import ZoneInfo
 
 from lottery_intelligence_platform.backfill import BackfillWindow, collect_result_window
-from lottery_intelligence_platform.catalog import ensure_lotobonheur_catalog
+from lottery_intelligence_platform.catalog import LotoBonheurCatalog, ensure_lotobonheur_catalog
 from lottery_intelligence_platform.collectors.lotobonheur import (
     LotobonheurResultCollector,
     ResultValidationRules,
@@ -30,6 +30,27 @@ from lottery_intelligence_platform.settlement import settle_pending_draws
 
 TZ = ZoneInfo("Africa/Abidjan")
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_catalog(connection: Any, window: BackfillWindow):
+    """Reuse the authoritative game_version (the one carrying the historical
+    draws). A new version must only be created when the game's rules change —
+    never as a function of the collection window."""
+    row = connection.execute(
+        """SELECT g.game_id, g.game_version_id, s.source_id,
+                  COUNT(d.draw_id) AS draw_count
+           FROM catalog.game_versions g
+           JOIN ingestion.sources s ON s.code = 'lotobonheur_official'
+           LEFT JOIN core.draws d ON d.game_version_id = g.game_version_id
+           GROUP BY g.game_id, g.game_version_id, s.source_id
+           ORDER BY draw_count DESC
+           LIMIT 1"""
+    ).fetchone()
+    if row is not None and row[3] > 0:
+        return LotoBonheurCatalog(
+            source_id=row[2], game_id=row[0], game_version_id=row[1], version="canonical",
+        )
+    return ensure_lotobonheur_catalog(connection, data_coverage_start=window.start_date)
 
 
 def _alert(connection: Any, code: str, severity: str, details: Mapping[str, Any]) -> None:
@@ -48,7 +69,7 @@ def handle_collect_results(connection: Any, run: JobRun) -> Mapping[str, Any]:
     end = date.today()
     window = BackfillWindow(end - timedelta(days=lookback), end)
 
-    catalog = ensure_lotobonheur_catalog(connection, data_coverage_start=window.start_date)
+    catalog = _resolve_catalog(connection, window)
     rules = ResultValidationRules.from_game_version(connection, catalog.game_version_id)
     collector = LotobonheurResultCollector(rules=rules)
     raw_store = raw_object_store_from_environment()
