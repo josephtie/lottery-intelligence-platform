@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Dashboard from './views/Dashboard.vue'
+import TurboLab from './views/TurboLab.vue'
 import Draws from './views/Draws.vue'
 import Predictions from './views/Predictions.vue'
 import Prospective from './views/Prospective.vue'
@@ -11,8 +12,9 @@ import Ops from './views/Ops.vue'
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', name: 'Dashboard', component: Dashboard,
-      meta: { title: 'Dashboard', affix: true } },
+    { path: '/', name: 'TurboLab', component: TurboLab,
+      meta: { title: 'Turbo Laboratory', affix: true } },
+    { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: 'Dashboard' } },
     { path: '/draws', name: 'Draws', component: Draws, meta: { title: 'Tirages' } },
     { path: '/predictions', name: 'Predictions', component: Predictions, meta: { title: 'Prédictions' } },
     { path: '/prospective', name: 'Prospective', component: Prospective, meta: { title: 'Prospective' } },

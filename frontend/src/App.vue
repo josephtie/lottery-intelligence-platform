@@ -68,7 +68,8 @@ interface Group { id: string, title: string, emoji: string, items: Item[] }
 
 const groups: Group[] = [
   { id: 'vue', title: 'Observation', emoji: '🏡', items: [
-    { to: '/', label: 'Dashboard', emoji: '🏠' },
+    { to: '/', label: 'Turbo Laboratory', emoji: '🧪' },
+    { to: '/dashboard', label: 'Dashboard', emoji: '🏠' },
     { to: '/draws', label: 'Tirages', emoji: '🎲' },
     { to: '/quality', label: 'Qualité données', emoji: '⚠️' },
   ]},

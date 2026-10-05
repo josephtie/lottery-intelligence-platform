@@ -171,6 +171,79 @@ ROUTES: dict[str, str] = {
         SELECT outcome, count(*) AS n, max(compared_at) AS latest
         FROM ingestion.source_comparisons GROUP BY outcome
     """,
+    "/api/turbo/variants": """
+        WITH flat AS (
+            SELECT t.key AS variant,
+                   (t.value ->> 'stake')::numeric AS stake,
+                   (t.value ->> 'payout')::numeric AS payout,
+                   (t.value ->> 'net')::numeric AS net,
+                   (t.value ->> 'hit')::boolean AS hit,
+                   (t.value ->> 'multiplier')::numeric AS multiplier
+            FROM research.prediction_outcomes o, jsonb_each(o.metrics -> 'turbo') t
+        )
+        SELECT variant, multiplier,
+               count(*) AS bets,
+               count(*) FILTER (WHERE hit) AS wins,
+               sum(stake) AS total_stake,
+               sum(payout) AS gross_payout,
+               sum(net) AS net,
+               CASE WHEN sum(stake) > 0
+                    THEN sum(net) / sum(stake) END AS roi
+        FROM flat GROUP BY variant, multiplier ORDER BY variant
+    """,
+    "/api/turbo/summary": """
+        SELECT count(*) AS evaluated,
+               count(DISTINCT o.draw_id) AS draws,
+               sum((o.metrics ->> 'stake')::numeric) AS total_stake,
+               sum((t.value ->> 'payout')::numeric) AS gross_payout,
+               sum((t.value ->> 'net')::numeric) AS net
+        FROM research.prediction_outcomes o,
+             jsonb_each(o.metrics -> 'turbo') t
+        WHERE t.key = 'turbo_2'
+    """,
+    "/api/turbo/models": """
+        WITH flat AS (
+            SELECT mv.code AS model_code, t.key AS variant,
+                   (t.value ->> 'hit')::boolean AS hit,
+                   (t.value ->> 'stake')::numeric AS stake,
+                   (t.value ->> 'net')::numeric AS net
+            FROM research.prediction_outcomes o
+            JOIN research.predictions p ON p.prediction_id = o.prediction_id
+            JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id,
+            jsonb_each(o.metrics -> 'turbo') t
+        )
+        SELECT model_code, variant, count(*) AS bets,
+               count(*) FILTER (WHERE hit) AS wins,
+               sum(stake) AS total_stake, sum(net) AS net,
+               CASE WHEN sum(stake) > 0 THEN sum(net) / sum(stake) END AS roi
+        FROM flat GROUP BY model_code, variant
+        ORDER BY model_code, variant
+    """,
+    "/api/turbo/results": """
+        SELECT o.outcome_id, d.scheduled_date, dt.display_name AS draw_type,
+               mv.code AS model_code, o.predicted_numbers, o.winning_numbers,
+               o.hit_count, o.positional_hits, o.metrics -> 'turbo' AS turbo,
+               o.settled_at
+        FROM research.prediction_outcomes o
+        JOIN research.predictions p ON p.prediction_id = o.prediction_id
+        JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
+        JOIN core.draws d ON d.draw_id = o.draw_id
+        JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+        ORDER BY d.scheduled_date DESC, mv.code
+    """,
+    "/api/turbo/next": """
+        SELECT p.prediction_id, dt.display_name AS draw_type,
+               COALESCE(d.scheduled_date, p.scheduled_date) AS scheduled_date,
+               mv.code AS model_code, mv.version AS model_version,
+               p.predicted_numbers, p.status, p.stake, p.created_at, p.locked_at
+        FROM research.predictions p
+        JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
+        JOIN catalog.draw_types dt ON dt.draw_type_id = p.draw_type_id
+        LEFT JOIN core.draws d ON d.draw_id = p.target_draw_id
+        WHERE p.status IN ('PENDING', 'LOCKED')
+        ORDER BY COALESCE(d.scheduled_date, p.scheduled_date), dt.display_name, mv.code
+        LIMIT 500
+    """,
     "/api/cohorts": """
         SELECT cv.cohort_version_id, c.code, c.display_name, cv.version,
                cv.definition, cv.effective_from, cv.created_at,
@@ -251,7 +324,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                             "routes": sorted(ROUTES) + ["/api/predictions?status=&limit="]}, 404)
                 return
             rows = self._query(sql)
-            if url.path in ("/api/health", "/api/overview"):
+            if url.path in ("/api/health", "/api/overview", "/api/turbo/summary"):
                 self._send({"data": rows[0]})
             else:
                 self._send({"data": rows})

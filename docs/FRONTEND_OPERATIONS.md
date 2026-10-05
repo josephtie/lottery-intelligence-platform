@@ -39,6 +39,7 @@ entered by the operator at runtime only.
 
 | Screen | Endpoints |
 |---|---|
+| Turbo Laboratory (`/`) | `/api/turbo/summary`, `/api/turbo/variants`, `/api/turbo/models`, `/api/turbo/next`, `/api/turbo/results` |
 | Dashboard | `/api/overview`, `/api/draws`, `/api/alerts` |
 | Tirages | `/api/draws` |
 | Prédictions | `/api/predictions`, `/api/outcomes` |
@@ -49,6 +50,24 @@ entered by the operator at runtime only.
 | Opérations | `/api/jobs`, `/api/reconciliation`, `/api/reconciliation/summary` |
 
 All data is live — there is no demo/fixture path.
+
+## Turbo Laboratory
+
+The landing screen answers four questions from real data only:
+
+- **Next draws** — sealed predictions per model × draw type, with ranks
+  (position = array index, matching the positional Turbo rule).
+- **Financial summary** — cumulative stakes, gross payout, net, realized ROI
+  over `prediction_outcomes.metrics.turbo` (computed by the settlement
+  engine under the versioned official rule — never recomputed client-side).
+- **Per-variant table** — Turbo 2/3/4/5: registered multiplier, evaluated
+  bets, wins, hit rate, stakes, gross, net, cumulative ROI (`n/c` when the
+  denominator is zero — never a fake 0 %).
+- **Model comparison** — the four pickers vs `null_model_benchmark` on the
+  same evaluated draws; per-draw result table with CSV export.
+
+Labeling rule enforced in the UI: these are *prospective evaluations*, not
+wagered bets — the banner states no real stake was engaged or collected.
 
 ## VPS deployment
 
