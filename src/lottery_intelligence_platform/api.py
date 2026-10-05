@@ -24,7 +24,11 @@ from uuid import UUID
 
 import psycopg
 
-from lottery_intelligence_platform import lab_matrix
+from lottery_intelligence_platform import lab_matrix, structure_analysis
+from lottery_intelligence_platform.dependence import pair_dependence_tests
+from lottery_intelligence_platform.lab_coverage import coverage_portfolio
+from lottery_intelligence_platform.lab_matrix import fdr_bh
+from lottery_intelligence_platform.lab_simulation import simulate_bankroll
 from lottery_intelligence_platform.prediction_generation import PICKERS
 from lottery_intelligence_platform.settlement import (
     DEFAULT_TURBO_STAKE,
@@ -128,6 +132,19 @@ ROUTES: dict[str, str] = {
                 JOIN research.predictions p ON p.prediction_id = o.prediction_id
                 WHERE p.model_version_id = mv.model_version_id) AS settled
         FROM research.model_versions mv ORDER BY mv.code, mv.version
+    """,
+    "/api/hypotheses": """
+        SELECT h.hypothesis_id, h.code, h.title, h.status, h.statement,
+               h.created_at,
+               count(f.finding_id) AS findings,
+               max(f.created_at) AS last_finding,
+               count(f.finding_id) FILTER (WHERE f.status = 'SUPPORTED') AS supported,
+               count(f.finding_id) FILTER (WHERE f.status = 'REJECTED') AS rejected,
+               count(f.finding_id) FILTER (WHERE f.status = 'INCONCLUSIVE') AS inconclusive
+        FROM research.hypotheses h
+        LEFT JOIN research.findings f ON f.hypothesis_id = h.hypothesis_id
+        GROUP BY h.hypothesis_id, h.code, h.title, h.status, h.statement, h.created_at
+        ORDER BY last_finding DESC NULLS LAST, h.created_at DESC
     """,
     "/api/findings": """
         SELECT f.finding_id, h.title AS hypothesis, f.status, f.conclusion,
@@ -454,7 +471,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             clause = "AND d.scheduled_date >= CURRENT_DATE - %s" if days > 0 else ""
             params: tuple[Any, ...] = (draw_type_id, days) if days > 0 else (draw_type_id,)
             rows = conn.execute(
-                f"""SELECT d.scheduled_date, n.number, n.position
+                f"""SELECT d.scheduled_date, d.scheduled_sequence, n.number, n.position
                     FROM core.draws d
                     JOIN core.draw_versions v
                       ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
@@ -462,41 +479,64 @@ class ApiHandler(BaseHTTPRequestHandler):
                       ON n.draw_version_id = v.draw_version_id
                      AND n.number_role = 'WINNING'
                     WHERE d.draw_type_id = %s {clause}
-                    ORDER BY d.scheduled_date DESC, n.position""",
+                    ORDER BY d.scheduled_date DESC, d.scheduled_sequence, n.position""",
                 params,
             ).fetchall()
-        draw_dates = sorted({r[0] for r in rows}, reverse=True)
-        draw_count = len(draw_dates)
-        date_rank = {d: i for i, d in enumerate(draw_dates)}
+        draw_keys = sorted({(r[0], r[1]) for r in rows}, reverse=True)
+        draw_count = len(draw_keys)
+        key_rank = {k: i for i, k in enumerate(draw_keys)}
         counts = {n: 0 for n in range(1, 91)}
         first_two = {n: 0 for n in range(1, 91)}
         last_rank = {n: None for n in range(1, 91)}
         last_date: dict[int, date | None] = {n: None for n in range(1, 91)}
-        by_draw: dict[date, list[int]] = {}
-        for draw_date, number, position in rows:
+        by_draw: dict[tuple[date, int], list[int]] = {}
+        for draw_date, seq, number, position in rows:
             counts[number] += 1
             if position is not None and position <= 2:
                 first_two[number] += 1
-            by_draw.setdefault(draw_date, []).append(number)
-            rank = date_rank[draw_date]
+            by_draw.setdefault((draw_date, seq), []).append(number)
+            rank = key_rank[(draw_date, seq)]
             if last_rank[number] is None or rank < last_rank[number]:
                 last_rank[number] = rank
                 last_date[number] = draw_date
-        # Most frequent unordered winning pairs within a draw
-        pair_counts: dict[tuple[int, int], int] = {}
+        # M03 — pair co-occurrence vs chance expectation.
+        # One-sided binomial right tail per pair; FDR (BH) over the full
+        # C(90,2) = 4005 hypothesis space — pairs at/below expectation get
+        # p = 1, which is what makes the correction honest.
+        draw_sets = [set(nums) for nums in by_draw.values()]
         pair_last: dict[tuple[int, int], date] = {}
-        for draw_date, nums in by_draw.items():
+        pair_counts_all: dict[tuple[int, int], int] = {}
+        for draw_key, nums in by_draw.items():
             nums = sorted(set(nums))
             for i in range(len(nums)):
                 for j in range(i + 1, len(nums)):
                     pair = (nums[i], nums[j])
-                    pair_counts[pair] = pair_counts.get(pair, 0) + 1
-                    pair_last.setdefault(pair, draw_date)
+                    pair_counts_all[pair] = pair_counts_all.get(pair, 0) + 1
+                    pair_last.setdefault(pair, draw_key[0])
+        tested = pair_dependence_tests(draw_sets)
+        n_hypotheses = 90 * 89 // 2
+        pvals = [r["p_value"] for r in tested] + [1.0] * (n_hypotheses - len(tested))
+        qvals = fdr_bh(pvals)
+        for entry, q in zip(tested, qvals):
+            entry["q_fdr"] = q
+            a, b = entry["pair"]
+            entry["last_date"] = pair_last[(a, b)].isoformat()
         pairs = [
-            {"pair": [a, b], "count": c, "last_date": pair_last[(a, b)].isoformat()}
-            for (a, b), c in sorted(
-                pair_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+            {"pair": list(t["pair"]), "count": t["observed"],
+             "expected": t["expected"], "lift": t["lift"],
+             "p_value": t["p_value"], "q_fdr": t["q_fdr"],
+             "last_date": t["last_date"]}
+            for t in tested[:20]
         ]
+        # fall back to raw top pairs when nothing exceeds expectation
+        if not pairs:
+            pairs = [
+                {"pair": [a, b], "count": c, "expected": draw_count * 20 / 8010,
+                 "lift": None, "p_value": None, "q_fdr": None,
+                 "last_date": pair_last[(a, b)].isoformat()}
+                for (a, b), c in sorted(
+                    pair_counts_all.items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+            ]
         first_two_ranked = [
             {"number": n, "count": c}
             for n, c in sorted(first_two.items(), key=lambda kv: (-kv[1], kv[0]))
@@ -533,6 +573,80 @@ class ApiHandler(BaseHTTPRequestHandler):
             "first_two_expected": draw_count * 2 / 90 if draw_count else 0.0,
             "top_pairs": pairs,
         }
+
+    def _lab_structure(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """M04 + M05 + M06: null reference, serial dependence, change point
+        for one draw type, computed on VALID draws in chronological order."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt_row
+            rows = conn.execute(
+                """SELECT d.scheduled_date, d.scheduled_sequence,
+                          jsonb_agg(n.number ORDER BY n.position) AS nums
+                   FROM core.draws d
+                   JOIN core.draw_versions v
+                     ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n
+                     ON n.draw_version_id = v.draw_version_id
+                    AND n.number_role = 'WINNING'
+                   WHERE d.draw_type_id = %s
+                   GROUP BY d.scheduled_date, d.scheduled_sequence
+                   ORDER BY d.scheduled_date, d.scheduled_sequence""",
+                (draw_type_id,),
+            ).fetchall()
+        draws = [(r[0], set(r[2])) for r in rows]
+        sets = [s for _, s in draws]
+        seed = abs(hash(display_name)) % (2**31)
+        return {
+            "draw_type": display_name,
+            "draws": len(sets),
+            "null_reference": structure_analysis.null_reference(
+                sets, simulations=199, seed=seed),
+            "serial_dependence": structure_analysis.serial_dependence(
+                sets, permutations=199, seed=seed),
+            "change_point": structure_analysis.change_point(
+                draws, permutations=199, seed=seed),
+        }
+
+    def _lab_simulation(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """M08 — Monte-Carlo bankroll simulation for a Turbo variant."""
+        try:
+            positions = int((qs.get("variant") or ["2"])[0])
+            draws = min(int((qs.get("draws") or ["200"])[0]), 2000)
+            paths = min(int((qs.get("paths") or ["500"])[0]), 2000)
+            stake = float((qs.get("stake") or ["100"])[0])
+            bankroll = float((qs.get("bankroll") or ["10000"])[0])
+            lift = float((qs.get("lift") or ["1.0"])[0])
+        except ValueError:
+            return {"error": "numeric parameters expected"}
+        try:
+            return simulate_bankroll(
+                positions=positions, stake=stake, draws=draws,
+                paths=paths, bankroll=bankroll, hit_lift=lift)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    def _lab_coverage(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """M10 — coverage-optimized ticket portfolio vs random baseline."""
+        try:
+            tickets = min(int((qs.get("tickets") or ["20"])[0]), 500)
+            pick_size = int((qs.get("pick_size") or ["2"])[0])
+        except ValueError:
+            return {"error": "tickets and pick_size must be integers"}
+        try:
+            return coverage_portfolio(
+                tickets=tickets, pick_size=pick_size, baselines=100)
+        except ValueError as exc:
+            return {"error": str(exc)}
 
     _matrix_cache: dict[str, dict[str, Any]] = {}
 
@@ -670,6 +784,15 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/statistics":
                 self._send(self._statistics(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/structure":
+                self._send(self._lab_structure(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/simulation":
+                self._send(self._lab_simulation(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/coverage":
+                self._send(self._lab_coverage(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

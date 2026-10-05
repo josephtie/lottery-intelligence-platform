@@ -11,6 +11,9 @@
   <LabMatrix v-else-if="tab === 'matrix'" />
   <LabCandidates v-else-if="tab === 'candidates'" />
   <ProspectiveH008 v-else-if="tab === 'prospective'" />
+  <LabStructure v-else-if="tab === 'structure'" />
+  <LabSimulation v-else-if="tab === 'simulation'" />
+  <Journal v-else-if="tab === 'journal'" />
 
   <template v-else>
     <div class="panel">
@@ -63,13 +66,19 @@ import ReplayLab from '../components/ReplayLab.vue'
 import LabMatrix from '../components/LabMatrix.vue'
 import LabCandidates from '../components/LabCandidates.vue'
 import ProspectiveH008 from '../components/ProspectiveH008.vue'
+import LabStructure from '../components/LabStructure.vue'
+import LabSimulation from '../components/LabSimulation.vue'
+import Journal from '../components/Journal.vue'
 
 const tabs = [
   { id: 'replay', label: '🔁 Prédictions par modèle' },
   { id: 'matrix', label: '📐 Matrice de performance' },
   { id: 'candidates', label: '🏆 Candidats par jeu' },
   { id: 'prospective', label: '🔮 Prospectif multi-modèles (H008)' },
-  { id: 'catalog', label: '📚 Catalogue' },
+  { id: 'structure', label: '🧬 Structure des tirages' },
+  { id: 'simulation', label: '💰 Simulation & Couverture' },
+  { id: 'journal', label: '📚 Journal' },
+  { id: 'catalog', label: '� Catalogue' },
 ]
 const tab = ref('replay')
 

@@ -73,11 +73,20 @@
         </div>
         <div>
           <h3 class="sh">👯 Paires les plus fréquentes</h3>
+          <div class="sub" style="margin-bottom:6px">
+            Comparées à l'attente du hasard — p-value binomiale, q corrigé FDR
+            sur les 4005 paires possibles. q &lt; 0.10 seulement = signal.
+          </div>
           <table class="data mb0" v-if="stats.top_pairs?.length">
-            <tr><th>Paire</th><th>Sorties</th><th>Dernière</th></tr>
+            <tr><th>Paire</th><th>Sorties</th><th>Attendu</th><th>Lift</th><th>p</th><th>q FDR</th><th>Dernière</th></tr>
             <tr v-for="p in stats.top_pairs.slice(0, 12)" :key="p.pair.join('-')">
               <td><span v-for="n in p.pair" :key="n" class="num-ball pair-ball">{{ n }}</span></td>
               <td class="mono">{{ p.count }}</td>
+              <td class="mono sub">{{ p.expected != null ? p.expected.toFixed(2) : '—' }}</td>
+              <td class="mono">{{ p.lift != null ? '×' + p.lift.toFixed(1) : '—' }}</td>
+              <td class="mono sub">{{ p.p_value != null ? p.p_value.toExponential(1) : '—' }}</td>
+              <td class="mono" :class="p.q_fdr != null && p.q_fdr < 0.10 ? 'badge-ok' : 'sub'">
+                {{ p.q_fdr != null ? p.q_fdr.toFixed(2) : '—' }}</td>
               <td class="mono sub">{{ p.last_date }}</td>
             </tr>
           </table>

@@ -7,11 +7,15 @@ crash cannot break the pipeline — unfinished work is simply retried.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping
+from uuid import uuid4
 from zoneinfo import ZoneInfo
+
+from psycopg.types.json import Jsonb
 
 from lottery_intelligence_platform.backfill import BackfillWindow, collect_result_window
 from lottery_intelligence_platform.catalog import LotoBonheurCatalog, ensure_lotobonheur_catalog
@@ -235,7 +239,105 @@ def handle_weekly_research_report(connection: Any, run: JobRun) -> Mapping[str, 
         ],
     }
     emit_event(connection, "WEEKLY_REPORT", report, job_run_id=run.job_run_id)
+    report["suspensions"] = _suspend_underperformers(connection, run)
     return report
+
+
+# M15 — adaptive track management. A model is a suspension candidate only on
+# strong prospective evidence: enough settled predictions AND a hit total
+# significantly below the null reference (one-sided binomial, p < 0.01).
+# Baselines are never suspended — they are the reference, not a hypothesis.
+_SUSPENSION_BASELINES = {"null_model_benchmark", "random"}
+_SUSPENSION_MIN_SETTLED = 40
+_SUSPENSION_ALPHA = 0.01
+
+
+def _suspend_underperformers(
+    connection: Any, run: JobRun
+) -> list[dict[str, Any]]:
+    """Create a new cohort version excluding models that prospectively
+    underperform the null. Members are append-only: suspension is expressed
+    as a new version whose member rows carry status='SUSPENDED'."""
+    from lottery_intelligence_platform.dependence import binomial_right_tail
+
+    rows = connection.execute(
+        """SELECT cohort_version_id, model_code, sum(settled) AS settled,
+                  sum(settled * mean_hits) AS total_hits
+           FROM research.prospective_metrics
+           GROUP BY cohort_version_id, model_code"""
+    ).fetchall()
+    by_model: dict[str, list[float]] = {}
+    for _cv, code, settled, hits in rows:
+        if code in _SUSPENSION_BASELINES:
+            continue
+        by_model.setdefault(code, [0.0, 0.0])
+        by_model[code][0] += settled or 0
+        by_model[code][1] += hits or 0.0
+    p_win = 5 / 90  # P(one pick appears among 5 winning numbers out of 90)
+    candidates = []
+    for code, (settled, hits) in by_model.items():
+        if settled < _SUSPENSION_MIN_SETTLED:
+            continue
+        n_picks = int(settled) * 2
+        # left tail P(X <= hits) = right tail P(Y >= n-hits) on failures
+        p_low = binomial_right_tail(n_picks, 1 - p_win, n_picks - int(hits))
+        if p_low < _SUSPENSION_ALPHA:
+            candidates.append({"model_code": code, "settled": int(settled),
+                               "hits": hits, "p_low": p_low})
+    if not candidates:
+        return []
+
+    latest = connection.execute(
+        """SELECT cohort_version_id, cohort_id, definition
+           FROM research.prospective_cohort_versions
+           ORDER BY created_at DESC LIMIT 1"""
+    ).fetchone()
+    if latest is None:
+        return []
+    old_cv, cohort_id, definition = latest
+    new_cv = uuid4()
+    version = connection.execute(
+        """SELECT COALESCE(MAX(version), 0) + 1
+           FROM research.prospective_cohort_versions WHERE cohort_id = %s""",
+        (cohort_id,),
+    ).fetchone()[0]
+    new_definition = dict(definition or {})
+    new_definition["suspended_models"] = [c["model_code"] for c in candidates]
+    new_definition["suspension_reason"] = (
+        "prospective underperformance vs null (weekly report auto-suspension)")
+    sha = hashlib.sha256(repr(sorted(new_definition.items())).encode()).hexdigest()
+    connection.execute(
+        """INSERT INTO research.prospective_cohort_versions
+           (cohort_version_id, cohort_id, version, definition,
+            definition_sha256, effective_from)
+           VALUES (%s, %s, %s, %s, %s, %s)""",
+        (new_cv, cohort_id, version, Jsonb(new_definition), sha, date.today()),
+    )
+    suspended_codes = {c["model_code"] for c in candidates}
+    members = connection.execute(
+        """SELECT m.cohort_member_id, m.model_version_id, mv.code,
+                  m.draw_type_id, m.parameters, m.seed
+           FROM research.prospective_cohort_members m
+           JOIN research.model_versions mv ON mv.model_version_id = m.model_version_id
+           WHERE m.cohort_version_id = %s""",
+        (old_cv,),
+    ).fetchall()
+    for _mid, mv_id, code, dt_id, params, seed in members:
+        connection.execute(
+            """INSERT INTO research.prospective_cohort_members
+               (cohort_member_id, cohort_version_id, model_version_id,
+                draw_type_id, parameters, seed, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (uuid4(), new_cv, mv_id, dt_id,
+             Jsonb(dict(params or {})), seed,
+             "SUSPENDED" if code in suspended_codes else "ACTIVE"),
+        )
+    emit_event(connection, "COHORT_SUSPENSION",
+               {"cohort_version_id": str(new_cv), "version": version,
+                "suspended": candidates}, job_run_id=run.job_run_id)
+    _alert(connection, "MODELS_SUSPENDED", "WARNING",
+           {"cohort_version": version, "models": candidates})
+    return candidates
 
 
 def _run_script(connection: Any, run: JobRun, script: str) -> Mapping[str, Any]:
@@ -307,7 +409,49 @@ def handle_audit_data_quality(connection: Any, run: JobRun) -> Mapping[str, Any]
             for r in coll
         ],
     }
+    # M14 — distribution drift: monthly per-number homogeneity split test
+    # per draw type. A hit means "inspect this period" — rule changes and
+    # collection gaps produce the same signal, never proof of manipulation.
+    from lottery_intelligence_platform.drift import detect_change_point
+    from lottery_intelligence_platform.regime import monthly_period_counts
+
+    drift_rows = connection.execute(
+        """SELECT dt.display_name, d.scheduled_date, n.number
+           FROM core.draws d
+           JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+           JOIN core.draw_versions v
+             ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+           JOIN core.draw_numbers n
+             ON n.draw_version_id = v.draw_version_id
+            AND n.number_role = 'WINNING'
+           WHERE d.status = 'SETTLED'"""
+    ).fetchall()
+    # rebuild per-draw multisets: name -> {(date, seq): [numbers]}
+    per_draw: dict[str, dict[Any, list[int]]] = {}
+    for name, draw_date, number in drift_rows:
+        per_draw.setdefault(name, {}).setdefault(draw_date, []).append(number)
+    drifts = []
+    for name, draws_map in per_draw.items():
+        seq = [(d, None, s) for d, s in sorted(draws_map.items())]
+        periods = [(k, c) for k, c in monthly_period_counts(seq) if sum(c) > 0]
+        if len(periods) < 3:
+            continue
+        result = detect_change_point(
+            [c for _, c in periods], permutations=199,
+            seed=abs(hash(name)) % (2**31))
+        if result is not None and result.permutation_p <= 0.05:
+            cutoff = periods[result.split_index][0]
+            drifts.append({"draw_type": name,
+                           "split_period": f"{cutoff[0]:04d}-{cutoff[1]:02d}",
+                           "statistic": result.statistic,
+                           "permutation_p": result.permutation_p})
+    report["distribution_drifts"] = drifts
     emit_event(connection, "DATA_QUALITY_REPORT", report, job_run_id=run.job_run_id)
+    if drifts:
+        _alert(connection, "DISTRIBUTION_DRIFT", "WARNING",
+               {"count": len(drifts), "detail": drifts})
+    else:
+        _auto_resolve(connection, run, "DISTRIBUTION_DRIFT")
     if missing:
         _alert(connection, "MISSING_DRAWS", "WARNING",
                {"count": missing, "draw_types": [r[0] for r in anomalies if r[2]]})
