@@ -87,6 +87,9 @@
     <div v-else class="sub">Pas encore assez de résultats pour comparer.</div>
   </div>
 
+  <!-- D2. Replay walk-forward -->
+  <ReplayLab />
+
   <!-- E. Résultats par tirage + export CSV -->
   <div class="panel">
     <h3 style="display:flex;justify-content:space-between;align-items:center">
@@ -126,6 +129,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useFetch } from '../useFetch'
+import ReplayLab from '../components/ReplayLab.vue'
 
 const { data: sum, error: errSum } = useFetch<any>('/api/turbo/summary')
 const { data: variants, error: errVar } = useFetch<any[]>('/api/turbo/variants')

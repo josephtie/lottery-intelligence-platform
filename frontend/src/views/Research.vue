@@ -1,6 +1,8 @@
 <template>
   <h2 class="page-title">🧪 Laboratoire de recherche</h2>
 
+  <ReplayLab />
+
   <div class="panel">
     <h3>Cohortes prospectives</h3>
     <table class="data mb0" v-if="cohorts?.length">
@@ -45,6 +47,7 @@
 
 <script setup lang="ts">
 import { useFetch } from '../useFetch'
+import ReplayLab from '../components/ReplayLab.vue'
 const { data: models } = useFetch<any[]>('/api/models')
 const { data: datasets } = useFetch<any[]>('/api/datasets')
 const { data: cohorts } = useFetch<any[]>('/api/cohorts')

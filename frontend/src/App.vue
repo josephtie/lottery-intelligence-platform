@@ -71,6 +71,7 @@ const groups: Group[] = [
     { to: '/', label: 'Turbo Laboratory', emoji: '🧪' },
     { to: '/dashboard', label: 'Dashboard', emoji: '🏠' },
     { to: '/draws', label: 'Tirages', emoji: '🎲' },
+    { to: '/statistics', label: 'Statistiques', emoji: '📊' },
     { to: '/quality', label: 'Qualité données', emoji: '⚠️' },
   ]},
   { id: 'preuves', title: 'Preuve prospective', emoji: '🔮', items: [

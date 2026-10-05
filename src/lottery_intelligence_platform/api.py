@@ -24,6 +24,15 @@ from uuid import UUID
 
 import psycopg
 
+from lottery_intelligence_platform.prediction_generation import PICKERS
+from lottery_intelligence_platform.settlement import (
+    DEFAULT_TURBO_STAKE,
+    _payout_multipliers,
+    positional_hit_counts,
+    turbo_settlement,
+)
+from lottery_intelligence_platform.stats import chi_square_sf
+
 DEFAULT_DSN = "host=localhost port=5432 dbname=lottery_platform user=directus"
 
 
@@ -244,6 +253,15 @@ ROUTES: dict[str, str] = {
         ORDER BY COALESCE(d.scheduled_date, p.scheduled_date), dt.display_name, mv.code
         LIMIT 500
     """,
+    "/api/lab/draw-types": """
+        SELECT DISTINCT ON (dt.display_name) dt.code, dt.display_name,
+               (SELECT count(*) FROM core.draws d
+                WHERE d.draw_type_id = dt.draw_type_id AND d.status = 'SETTLED') AS settled_draws,
+               (SELECT max(d.scheduled_date) FROM core.draws d
+                WHERE d.draw_type_id = dt.draw_type_id AND d.status = 'SETTLED') AS last_draw
+        FROM catalog.draw_types dt
+        ORDER BY dt.display_name, dt.draw_type_id
+    """,
     "/api/cohorts": """
         SELECT cv.cohort_version_id, c.code, c.display_name, cv.version,
                cv.definition, cv.effective_from, cv.created_at,
@@ -287,6 +305,172 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _lab_replay(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Re-run every cohort picker against one past draw, strict walk-forward:
+        each picker only sees draws scheduled before the target date."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        target_raw = (qs.get("date") or [None])[0]
+        if not draw_type or not target_raw:
+            return {"error": "draw_type and date are required"}
+        try:
+            target = date.fromisoformat(target_raw)
+        except ValueError:
+            return {"error": "date must be YYYY-MM-DD"}
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt_row
+            draw = conn.execute(
+                """SELECT d.draw_id, d.status,
+                          (SELECT jsonb_agg(n.number ORDER BY n.position)
+                           FROM core.draw_versions v
+                           JOIN core.draw_numbers n
+                             ON n.draw_version_id = v.draw_version_id
+                            AND n.number_role = 'WINNING'
+                           WHERE v.draw_id = d.draw_id
+                             AND v.validation_status = 'VALID') AS winning
+                   FROM core.draws d
+                   WHERE d.draw_type_id = %s AND d.scheduled_date = %s
+                   ORDER BY d.created_at DESC LIMIT 1""",
+                (draw_type_id, target),
+            ).fetchone()
+            history = conn.execute(
+                """SELECT count(*) FROM core.draws d
+                   WHERE d.draw_type_id = %s AND d.scheduled_date < %s
+                     AND d.status = 'SETTLED'""",
+                (draw_type_id, target),
+            ).fetchone()[0]
+            members = conn.execute(
+                """SELECT mv.code, mv.version, cm.parameters, cm.seed
+                   FROM research.prospective_cohort_members cm
+                   JOIN research.model_versions mv
+                     ON mv.model_version_id = cm.model_version_id
+                   JOIN research.prospective_cohort_versions cv
+                     ON cv.cohort_version_id = cm.cohort_version_id
+                   WHERE cv.cohort_version_id = (
+                       SELECT cohort_version_id FROM research.prospective_cohort_versions
+                       ORDER BY created_at DESC LIMIT 1)
+                   ORDER BY mv.code""",
+            ).fetchall()
+            winning = draw[2] if draw else None
+            multipliers = (
+                _payout_multipliers(conn, None, draw[0]) if draw and winning else {}
+            )
+            models = []
+            for code, version, params, seed in members:
+                picker = PICKERS.get(code)
+                if picker is None:
+                    continue
+                predicted = picker(conn, draw_type_id, target, params or {}, seed)
+                entry: dict[str, Any] = {
+                    "model_code": code,
+                    "model_version": version,
+                    "predicted": predicted,
+                }
+                if winning:
+                    entry["hit_numbers"] = sorted(set(predicted) & set(winning))
+                    entry["hits"] = len(entry["hit_numbers"])
+                    entry["positional_hits"] = positional_hit_counts(predicted, winning)
+                    if multipliers:
+                        entry["turbo"] = turbo_settlement(
+                            predicted, winning,
+                            stake=DEFAULT_TURBO_STAKE, multipliers=multipliers,
+                        )
+                models.append(entry)
+        return {
+            "draw_type": display_name,
+            "date": target.isoformat(),
+            "draw_found": draw is not None,
+            "draw_status": draw[1] if draw else None,
+            "winning_numbers": winning,
+            "history_draws": history,
+            "models": models,
+            "disclaimer": "Simulation walk-forward : chaque modèle ne voit que "
+                          "l'historique antérieur au tirage. Pas un gain réel.",
+        }
+
+    def _statistics(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Per-number frequency / delay stats for one draw type."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        days = int((qs.get("days") or ["0"])[0])
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt_row = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+                if dt_row is None:
+                    return {"error": f"unknown draw_type: {draw_type}"}
+            else:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+            draw_type_id, display_name = dt_row
+            clause = "AND d.scheduled_date >= CURRENT_DATE - %s" if days > 0 else ""
+            params: tuple[Any, ...] = (draw_type_id, days) if days > 0 else (draw_type_id,)
+            rows = conn.execute(
+                f"""SELECT d.scheduled_date, n.number
+                    FROM core.draws d
+                    JOIN core.draw_versions v
+                      ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                    JOIN core.draw_numbers n
+                      ON n.draw_version_id = v.draw_version_id
+                     AND n.number_role = 'WINNING'
+                    WHERE d.draw_type_id = %s {clause}
+                    ORDER BY d.scheduled_date DESC""",
+                params,
+            ).fetchall()
+        draw_dates = sorted({r[0] for r in rows}, reverse=True)
+        draw_count = len(draw_dates)
+        date_rank = {d: i for i, d in enumerate(draw_dates)}
+        counts = {n: 0 for n in range(1, 91)}
+        last_rank = {n: None for n in range(1, 91)}
+        last_date: dict[int, date | None] = {n: None for n in range(1, 91)}
+        for draw_date, number in rows:
+            counts[number] += 1
+            rank = date_rank[draw_date]
+            if last_rank[number] is None or rank < last_rank[number]:
+                last_rank[number] = rank
+                last_date[number] = draw_date
+        observed = [counts[n] for n in range(1, 91)]
+        total = sum(observed)
+        expected = total / 90 if total else 0.0
+        chi2 = (sum((o - expected) ** 2 / expected for o in observed)
+                if expected else 0.0)
+        p_value = chi_square_sf(chi2, 89) if expected else None
+        numbers = [
+            {"number": n, "count": counts[n],
+             "delay": last_rank[n] if last_rank[n] is not None else draw_count,
+             "last_date": last_date[n].isoformat() if last_date[n] else None,
+             "deviation": (counts[n] - expected) if expected else 0.0}
+            for n in range(1, 91)
+        ]
+        by_count = sorted(numbers, key=lambda x: (-x["count"], x["number"]))
+        return {
+            "draw_type": display_name,
+            "days": days or None,
+            "draw_count": draw_count,
+            "expected_per_number": expected,
+            "chi_square": chi2,
+            "df": 89,
+            "p_value": p_value,
+            "uniform": p_value is not None and p_value >= 0.05,
+            "numbers": numbers,
+            "hot": by_count[:10],
+            "cold": by_count[-10:],
+            "max_delay": max(numbers, key=lambda x: x["delay"]),
+        }
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if self.token is not None:
@@ -318,10 +502,19 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send({"predictions": self._query(
                     PREDICTIONS_SQL, {"status": status, "limit": limit})})
                 return
+            if url.path == "/api/lab/replay":
+                self._send(self._lab_replay(parse_qs(url.query)))
+                return
+            if url.path == "/api/statistics":
+                self._send(self._statistics(parse_qs(url.query)))
+                return
             sql = ROUTES.get(url.path)
             if sql is None:
                 self._send({"error": "not found",
-                            "routes": sorted(ROUTES) + ["/api/predictions?status=&limit="]}, 404)
+                            "routes": sorted(ROUTES) + [
+                                "/api/predictions?status=&limit=",
+                                "/api/lab/replay?draw_type=&date=",
+                                "/api/statistics?draw_type=&days="]}, 404)
                 return
             rows = self._query(sql)
             if url.path in ("/api/health", "/api/overview", "/api/turbo/summary"):
