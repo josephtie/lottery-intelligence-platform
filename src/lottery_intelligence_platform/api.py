@@ -37,6 +37,22 @@ from lottery_intelligence_platform.stats import chi_square_sf
 DEFAULT_DSN = "host=localhost port=5432 dbname=lottery_platform user=directus"
 
 
+def _env_dsn() -> str:
+    """Build the DSN from LOTTERY_DATABASE_* parts (libpq reads PGPASSWORD)."""
+    if not os.environ.get("LOTTERY_DATABASE_HOST"):
+        return DEFAULT_DSN
+    parts = [
+        f"host={os.environ.get('LOTTERY_DATABASE_HOST')}",
+        f"port={os.environ.get('LOTTERY_DATABASE_PORT', '5432')}",
+        f"dbname={os.environ.get('LOTTERY_DATABASE_NAME', 'lottery_platform')}",
+        f"user={os.environ.get('LOTTERY_DATABASE_USER', 'directus')}",
+    ]
+    password = os.environ.get("LOTTERY_DATABASE_PASSWORD") or os.environ.get("PGPASSWORD")
+    if password:
+        parts.append(f"password={password}")
+    return " ".join(parts)
+
+
 def _default(obj: Any) -> Any:
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
@@ -681,7 +697,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Lottery platform read API")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8090)
-    parser.add_argument("--dsn", default=os.environ.get("LOTTERY_DB_DSN", DEFAULT_DSN))
+    parser.add_argument("--dsn", default=os.environ.get("LOTTERY_DB_DSN") or _env_dsn())
     args = parser.parse_args()
     ApiHandler.dsn = args.dsn
     ApiHandler.token = os.environ.get("LOTTERY_API_TOKEN") or None

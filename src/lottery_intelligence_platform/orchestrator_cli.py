@@ -43,6 +43,7 @@ def _run_scheduler(interval: int) -> int:
     from datetime import datetime, timezone
 
     connection = _connect(autocommit=True)
+    ensure_jobs(connection)  # fresh database: register the default job specs
     while True:
         try:
             with connection.transaction():
@@ -75,6 +76,7 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("health", help="print orchestrator health JSON")
     sub.add_parser("register-lab-models",
                    help="register lab pickers and create the extended cohort version")
+    sub.add_parser("migrate", help="apply pending SQL migrations")
     return parser
 
 
@@ -110,6 +112,12 @@ def main() -> int:
             result = register_lab_cohort(connection)
             connection.commit()
             print(json.dumps(result, default=str))
+            return 0
+        if args.command == "migrate":
+            from lottery_intelligence_platform.migrations import apply_migrations
+            applied = apply_migrations(connection)
+            connection.commit()
+            print(json.dumps({"applied": applied}))
             return 0
     return 2
 

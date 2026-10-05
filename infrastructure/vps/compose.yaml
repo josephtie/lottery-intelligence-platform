@@ -11,6 +11,19 @@
 #   docker compose -f infrastructure/vps/compose.yaml --env-file .env up -d
 
 services:
+  bootstrap:
+    # One-shot: apply SQL migrations on a fresh database, then exit.
+    #   docker compose -f infrastructure/vps/compose.yaml --env-file .env \
+    #     --profile bootstrap run --rm bootstrap
+    build: ../..
+    env_file: .env
+    profiles: ["bootstrap"]
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.orchestrator_cli
+      - migrate
+
   scheduler:
     build: ../..
     env_file: .env

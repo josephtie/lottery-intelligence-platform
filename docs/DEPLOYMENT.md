@@ -7,12 +7,17 @@ steps below are executed and verified.
 ## Architecture
 
 Two stateless services built from the root `Dockerfile`
-(`infrastructure/vps/compose.yaml`):
+(`infrastructure/vps/compose.yaml`), plus a one-shot bootstrap:
 
 | Service | Command | Role |
 |---|---|---|
-| `scheduler` | `orchestrator_cli run-scheduler` | replaces the macOS crontab: enqueues cron-due jobs (`enqueue_due`, Africa/Abidjan) and drains `ops.job_runs` every 30 s |
-| `api` | `lottery_intelligence_platform.api --host 0.0.0.0` | read-only API + console |
+| `scheduler` | `orchestrator_cli run-scheduler` | replaces the macOS crontab entirely: `ensure_jobs` registers the 10 job specs on a fresh DB, `enqueue_due` fires them (collect_results + settle every 5 min, predictions ×2/h, daily/weekly summaries, audit, hourly evidence export, backups 02:00–03:00) and the loop drains `ops.job_runs` every 30 s |
+| `api` | `lottery_intelligence_platform.api --host 0.0.0.0` | read-only API + Vue console (dist baked into the image) |
+| `bootstrap` (profile) | `orchestrator_cli migrate` | one-shot: applies pending SQL migrations, exits |
+
+The image carries everything the jobs need: `pg_dump` (postgresql-client),
+`scripts/*.sh`, the built `frontend/dist`, and the installed Python package —
+no venv paths, no host dependencies.
 
 State stays outside the stack: **PostgreSQL** and the **S3/MinIO raw store**
 are external dependencies (`LOTTERY_DATABASE_*`, `LOTTERY_S3_*`). Use a managed
@@ -22,10 +27,9 @@ in this compose file, so a torn-down stack never takes the data with it.
 ## Prerequisites on the VPS
 
 - Docker + compose plugin
-- PostgreSQL ≥ 15 reachable from the containers, with all migrations applied
-  (`apply_migrations`) — including ≥ `0020`
+- PostgreSQL ≥ 15 reachable from the containers — empty database is fine,
+  migrations run via the `bootstrap` service (creates every schema/table)
 - S3/MinIO reachable, bucket `lottery-raw`
-- Backups volume `lottery-backups` mounted for `backup_postgresql` dumps
 - Reverse proxy (nginx/Caddy) in front of the API if exposed beyond loopback —
   `LOTTERY_API_TOKEN` is then mandatory
 
@@ -34,17 +38,40 @@ in this compose file, so a torn-down stack never takes the data with it.
 ```bash
 git clone <repo> && cd lottery-intelligence-platform
 cp infrastructure/vps/.env.example infrastructure/vps/.env   # fill it in
-docker compose -f infrastructure/vps/compose.yaml --env-file infrastructure/vps/.env build
-docker compose -f infrastructure/vps/compose.yaml --env-file infrastructure/vps/.env up -d
+COMPOSE="docker compose -f infrastructure/vps/compose.yaml --env-file infrastructure/vps/.env"
+
+$COMPOSE build
+# fresh database: apply all migrations first (no-op if already applied)
+$COMPOSE --profile bootstrap run --rm bootstrap
+$COMPOSE up -d
 ```
+
+`run-scheduler` calls `ensure_jobs` at startup, so the job catalogue exists
+even on a blank database; the first `collect_results` fires within 5 min.
+
+## Cron coverage (what runs automatically)
+
+| Job | Schedule | Role |
+|---|---|---|
+| `collect_results` | `*/5 * * * *` | collect LONACI/lotobonheur results |
+| `settle_pending_draws` | `*/5 * * * *` | settle draws + score predictions |
+| `generate_predictions` | `15,45 * * * *` | seal cohort predictions |
+| `daily_research_summary` | `0 23 * * *` | daily research rollup |
+| `weekly_research_report` | `30 23 * * 0` | weekly report |
+| `audit_data_quality` | `45 23 * * *` | quality audit + alert auto-resolution |
+| `export_evidence` | `10 * * * *` | NDJSON evidence export to S3 |
+| `backup_postgresql` | `0 2 * * *` | pg_dump → `/app/backups` volume |
+| `backup_raw_storage` | `30 2 * * *` | S3 mirror → `/app/backups` volume |
+| `verify_backups` | `0 3 * * *` | freshness check (< 36 h) |
 
 ## Verify
 
 ```bash
-docker compose ... ps                                  # both services healthy
-docker compose ... exec scheduler python -m lottery_intelligence_platform.orchestrator_cli health
+$COMPOSE ps                                  # both services healthy
+$COMPOSE exec scheduler python -m lottery_intelligence_platform.orchestrator_cli health
 curl -H "Authorization: Bearer $LOTTERY_API_TOKEN" http://127.0.0.1:8090/api/health
 # within ~5 min: collect_results runs appear in ops.job_runs via `cron:` keys
+# after 02:00–03:00: dumps land in the lottery-backups volume
 ```
 
 ## Update

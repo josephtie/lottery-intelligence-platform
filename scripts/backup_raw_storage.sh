@@ -16,8 +16,9 @@ if command -v aws >/dev/null 2>&1; then
 elif command -v mc >/dev/null 2>&1; then
   mc mirror "local/${BUCKET}" "$BACKUP_DIR/${STAMP}/"
 else
-  # boto3 fallback — always available in the project venv.
-  .venv/bin/python - "$BUCKET" "$BACKUP_DIR/${STAMP}/" <<'PY'
+  # boto3 fallback — project venv locally, system python in the container.
+  PYBIN="$(command -v python || echo .venv/bin/python)"
+  PYTHONPATH="${PYTHONPATH:-src}" "$PYBIN" - "$BUCKET" "$BACKUP_DIR/${STAMP}/" <<'PY'
 import os, sys
 from pathlib import Path
 sys.path.insert(0, "src")
