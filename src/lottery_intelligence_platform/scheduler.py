@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
 
@@ -53,6 +54,12 @@ DEFAULT_JOB_DEFS: tuple[dict[str, Any], ...] = (
         "code": "audit_data_quality",
         "kind": "MAINTENANCE",
         "schedule_cron": "45 23 * * *",
+        "config": {},
+    },
+    {
+        "code": "export_evidence",
+        "kind": "MAINTENANCE",
+        "schedule_cron": "10 * * * *",
         "config": {},
     },
     {
@@ -214,6 +221,69 @@ def fail_run(connection: Any, job_run_id: UUID, error: BaseException | str) -> s
         (message, job_run_id),
     )
     return "DEAD"
+
+
+def _cron_field_matches(field: str, value: int, lo: int, hi: int) -> bool:
+    """Match one cron field: `*`, `*/n`, `a`, `a,b,c`, `a-b`, `a-b/n`."""
+    for part in field.split(","):
+        step = 1
+        if "/" in part:
+            part, s = part.split("/", 1)
+            step = int(s)
+        if part == "*":
+            start, end = lo, hi
+        elif "-" in part:
+            start, end = (int(x) for x in part.split("-", 1))
+        else:
+            start = end = int(part)
+        if start <= value <= end and (value - start) % step == 0:
+            return True
+    return False
+
+
+def cron_is_due(schedule: str, moment: datetime) -> bool:
+    """True if a 5-field cron spec fires at `moment` (minute granularity)."""
+    fields = schedule.split()
+    if len(fields) != 5:
+        raise ValueError(f"unsupported cron spec: {schedule!r}")
+    minute, hour, dom, month, dow = fields
+    # Cron convention: when both dom and dow are restricted, EITHER matches.
+    dom_restricted, dow_restricted = dom != "*", dow != "*"
+    day_ok = (
+        _cron_field_matches(dom, moment.day, 1, 31) if dom_restricted else True
+    ) and (
+        _cron_field_matches(dow, (moment.weekday() + 1) % 7, 0, 7) if dow_restricted else True
+    )
+    if dom_restricted and dow_restricted:
+        day_ok = _cron_field_matches(dom, moment.day, 1, 31) or _cron_field_matches(
+            dow, (moment.weekday() + 1) % 7, 0, 7)
+    return (
+        _cron_field_matches(minute, moment.minute, 0, 59)
+        and _cron_field_matches(hour, moment.hour, 0, 23)
+        and _cron_field_matches(month, moment.month, 1, 12)
+        and day_ok
+    )
+
+
+def enqueue_due(connection: Any, moment: datetime, *, tz: str = "Africa/Abidjan") -> int:
+    """Enqueue one run for each job whose cron fires at `moment` (in `tz`).
+
+    Idempotent via a `cron:<code>:<minute>` idempotency key — a daemon tick or
+    a restart never double-enqueues the same minute.
+    """
+    local = moment.astimezone(ZoneInfo(tz)).replace(second=0, microsecond=0)
+    enqueued = 0
+    for code, schedule in connection.execute(
+        "SELECT code, schedule_cron FROM ops.jobs"
+    ).fetchall():
+        if schedule and cron_is_due(schedule, local):
+            _, created = enqueue_run(
+                connection, code,
+                idempotency_key=f"cron:{code}:{local.isoformat()}",
+                details={"trigger": "cron", "fire_at": local.isoformat()},
+            )
+            enqueued += created
+    return enqueued
 
 
 def run_due(

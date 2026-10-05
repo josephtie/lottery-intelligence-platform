@@ -1,0 +1,61 @@
+# VPS deployment — application services.
+#
+# Two services, one image:
+#   scheduler  — cron replacement: enqueues due jobs, drains the queue
+#   api        — read-only API + console (token-protected on non-loopback)
+#
+# State lives OUTSIDE this stack: PostgreSQL (LOTTERY_DATABASE_*) and the
+# S3-compatible raw store (LOTTERY_S3_*). Point them at managed services or
+# co-located containers — the compose file deliberately does not own them.
+#
+#   docker compose -f infrastructure/vps/compose.yaml --env-file .env up -d
+
+services:
+  scheduler:
+    build: ../..
+    env_file: .env
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.orchestrator_cli
+      - run-scheduler
+      - --interval
+      - "30"
+    volumes:
+      - lottery-backups:/app/backups
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # daemon is healthy if it answers a DB-backed health query
+      test: ["CMD", "python", "-m", "lottery_intelligence_platform.orchestrator_cli", "health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  api:
+    build: ../..
+    env_file: .env
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.api
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    ports:
+      - "127.0.0.1:${LOTTERY_API_PORT:-8080}:8080"  # front with your reverse proxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  lottery-backups:

@@ -21,6 +21,7 @@ from lottery_intelligence_platform.collectors.lotobonheur import (
     ResultValidationRules,
 )
 from lottery_intelligence_platform.draw_registry import DrawRegistry
+from lottery_intelligence_platform.evidence_export import export_evidence
 from lottery_intelligence_platform.prediction_generation import (
     ensure_default_cohort,
     generate_predictions,
@@ -321,6 +322,13 @@ def handle_audit_data_quality(connection: Any, run: JobRun) -> Mapping[str, Any]
     return report
 
 
+def handle_export_evidence(connection: Any, run: JobRun) -> Mapping[str, Any]:
+    """Ship evidence tables to the raw store (hourly). Idempotent:
+    unchanged content hashes to the same object key."""
+    store = raw_object_store_from_environment()
+    return export_evidence(connection, store)
+
+
 def handle_backup_postgresql(connection: Any, run: JobRun) -> Mapping[str, Any]:
     return _run_script(connection, run, "backup_postgresql.sh")
 
@@ -340,6 +348,7 @@ HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "daily_research_summary": handle_daily_research_summary,
     "weekly_research_report": handle_weekly_research_report,
     "audit_data_quality": handle_audit_data_quality,
+    "export_evidence": handle_export_evidence,
     "backup_postgresql": handle_backup_postgresql,
     "backup_raw_storage": handle_backup_raw_storage,
     "verify_backups": handle_verify_backups,

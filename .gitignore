@@ -10,3 +10,6 @@ __pycache__/
 .DS_Store
 .idea/
 logs/
+.DS_Store
+frontend/node_modules/
+frontend/dist/

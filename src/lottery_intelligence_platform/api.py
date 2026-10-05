@@ -121,6 +121,65 @@ ROUTES: dict[str, str] = {
         JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
         ORDER BY o.settled_at DESC LIMIT 200
     """,
+    "/api/overview": """
+        SELECT
+          (SELECT count(*) FROM core.draws WHERE status = 'SETTLED') AS settled_draws,
+          (SELECT count(*) FROM core.draws) AS total_draws,
+          (SELECT min(scheduled_date) FROM core.draws) AS first_draw,
+          (SELECT max(scheduled_date) FROM core.draws WHERE status = 'SETTLED') AS last_draw,
+          (SELECT count(DISTINCT draw_type_id) FROM core.draws WHERE status = 'SETTLED') AS draw_types,
+          (SELECT count(*) FROM research.predictions) AS predictions_total,
+          (SELECT count(*) FROM research.predictions WHERE status = 'PENDING') AS pending,
+          (SELECT count(*) FROM research.predictions WHERE status = 'SCORED') AS scored,
+          (SELECT count(*) FROM ops.alerts WHERE acknowledged_at IS NULL) AS open_alerts,
+          (SELECT count(*) FROM ops.job_runs
+           WHERE finished_at > now() - interval '24 hours' AND status = 'FAILED') AS failed_24h,
+          (SELECT max(finished_at) FROM ops.job_runs) AS last_job_run
+    """,
+    "/api/jobs": """
+        SELECT r.job_run_id, j.code, r.status, r.created_at, r.started_at,
+               r.finished_at, r.details, r.last_error
+        FROM ops.job_runs r JOIN ops.jobs j ON j.job_id = r.job_id
+        ORDER BY r.created_at DESC LIMIT 100
+    """,
+    "/api/alerts": """
+        SELECT alert_id, code, severity, entity_type, details, dedupe_key,
+               raised_at, acknowledged_at
+        FROM ops.alerts ORDER BY raised_at DESC LIMIT 200
+    """,
+    "/api/quality": """
+        SELECT * FROM core.draw_quality_summary ORDER BY draw_type
+    """,
+    "/api/quality/anomalies": """
+        SELECT draw_type, scheduled_date, draw_status, validation_status,
+               missing_result, wrong_count, duplicate_number, number_out_of_range
+        FROM core.draw_quality
+        WHERE missing_result OR wrong_count OR duplicate_number OR number_out_of_range
+        ORDER BY scheduled_date DESC LIMIT 200
+    """,
+    "/api/quality/collection": """
+        SELECT * FROM ingestion.collection_quality ORDER BY day DESC LIMIT 60
+    """,
+    "/api/reconciliation": """
+        SELECT c.comparison_id, c.outcome, o.draw_date, o.draw_name,
+               c.primary_numbers, c.secondary_numbers, c.compared_at
+        FROM ingestion.source_comparisons c
+        JOIN ingestion.secondary_observations o ON o.observation_id = c.observation_id
+        ORDER BY c.compared_at DESC LIMIT 200
+    """,
+    "/api/reconciliation/summary": """
+        SELECT outcome, count(*) AS n, max(compared_at) AS latest
+        FROM ingestion.source_comparisons GROUP BY outcome
+    """,
+    "/api/cohorts": """
+        SELECT cv.cohort_version_id, c.code, c.display_name, cv.version,
+               cv.definition, cv.effective_from, cv.created_at,
+               (SELECT count(*) FROM research.prospective_cohort_members m
+                WHERE m.cohort_version_id = cv.cohort_version_id) AS members
+        FROM research.prospective_cohort_versions cv
+        JOIN research.prospective_cohorts c ON c.cohort_id = cv.cohort_id
+        ORDER BY cv.created_at DESC
+    """,
 }
 
 
@@ -163,13 +222,18 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send({"error": "unauthorized"}, 401)
                 return
         try:
-            if url.path in ("/", "/console"):
-                html = (Path(__file__).with_name("console.html")).read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(html)))
-                self.end_headers()
-                self.wfile.write(html)
+            if url.path == "/console":
+                self._send_file(Path(__file__).with_name("console.html"))
+                return
+            if url.path == "/" or url.path.startswith("/assets/"):
+                dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+                target = dist / (url.path.lstrip("/") or "index.html")
+                if url.path.startswith("/assets/") and not target.is_file():
+                    self._send({"error": "not found"}, 404)
+                    return
+                if url.path == "/" and not dist.is_dir():
+                    target = Path(__file__).with_name("console.html")
+                self._send_file(target if target.is_file() else dist / "index.html")
                 return
             if url.path == "/api/predictions":
                 qs = parse_qs(url.query)
@@ -187,9 +251,30 @@ class ApiHandler(BaseHTTPRequestHandler):
                             "routes": sorted(ROUTES) + ["/api/predictions?status=&limit="]}, 404)
                 return
             rows = self._query(sql)
-            self._send({"data": rows[0]} if url.path == "/api/health" else {"data": rows})
+            if url.path in ("/api/health", "/api/overview"):
+                self._send({"data": rows[0]})
+            else:
+                self._send({"data": rows})
         except Exception as exc:  # noqa: BLE001 - surface as 500, keep serving
             self._send({"error": str(exc)[:300]}, 500)
+
+    def _send_file(self, path: Path) -> None:
+        if not path.is_file():
+            self._send({"error": "not found"}, 404)
+            return
+        ctype = ("text/html" if path.suffix == ".html"
+                 else "text/css" if path.suffix == ".css"
+                 else "text/javascript" if path.suffix == ".js"
+                 else "image/svg+xml" if path.suffix == ".svg"
+                 else "application/octet-stream")
+        if path.suffix == ".html":
+            ctype += "; charset=utf-8"
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, fmt: str, *args: Any) -> None:
         pass

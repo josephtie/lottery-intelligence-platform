@@ -66,3 +66,42 @@ payload's sha256 is in `ingestion.raw_objects` for integrity re-verification.
   last run timestamp, recent failures.
 - `audit_data_quality` (23:45): per-type anomaly rollup + collection
   success/duplicate rates; alerts `MISSING_DRAWS` / `DRAW_QUALITY_ANOMALY`.
+
+## Evidence export (`export_evidence`, hourly at :10)
+
+Ships the irreplaceable evidence tables — predictions, outcomes, coverage,
+cohort versions, job events, alerts, findings — as one NDJSON object to the
+content-addressed raw store. Hourly granularity caps evidence loss at ~1 h
+instead of the 24 h pg_dump RPO; a lost prediction is lost *proof* that cannot
+be re-collected. Idempotent by construction: unchanged content hashes to the
+same `raw/sha256/...` key, so a quiet hour costs nothing. Each export writes
+an `EVIDENCE_EXPORTED` audit + job event carrying the sha256.
+
+## Secondary source reconciliation
+
+An independent check against the single-source blind spot (silent source
+error, never corrected). Channel: file import — an NDJSON file from any
+independent record (aggregator export, published PDF, manual transcription):
+
+```json
+{"draw_date": "2026-10-05", "draw_name": "Fortune Thursday", "winning_numbers": [1,2,3,4,5]}
+```
+
+```bash
+lottery-secondary-import path/to/observations.ndjson
+```
+
+The file is preserved raw and content-addressed; each observation is compared
+to the canonical registry → `MATCH`, `MISMATCH` (+ `SOURCE_CONFLICT` alert,
+severity CRITICAL), `MISSING_PRIMARY`, or `UNMATCHED_NAME`. Conflicts are
+recorded in `ingestion.source_comparisons` — the canonical row is **never**
+auto-corrected; arbitration stays human.
+
+## Dedicated test database
+
+Integration tests require `LOTTERY_TEST_DATABASE_URL` and skip without it —
+there is no fallback to the live DSN. The test DB is a template clone
+(`createdb -T lottery_platform lottery_platform_test`, ~15.7k draws) with all
+migrations applied. Refresh by re-cloning when the schema or fixture needs
+current data; drop stale `cron:` job runs is unnecessary (append-only, they
+expire unclaimed).

@@ -1,0 +1,103 @@
+/* Thème : noir / blanc / or */
+:root {
+  --bg: #0d0d0f;
+  --panel: #16161a;
+  --panel-2: #1d1d23;
+  --border: #2a2a32;
+  --text: #f2f2f2;
+  --muted: #9a9aa5;
+  --gold: #d4a017;
+  --gold-soft: #f0c94a;
+  --green: #3fbf7f;
+  --red: #e05252;
+  --orange: #e09a3f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+}
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 12px 0;
+}
+.sidebar .brand {
+  font-size: 16px; font-weight: 700; color: var(--gold);
+  padding: 14px 18px 18px; letter-spacing: 0.5px;
+}
+.sidebar a {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--muted); text-decoration: none;
+  padding: 10px 18px; border-left: 3px solid transparent;
+}
+.sidebar a:hover { color: var(--text); background: var(--panel-2); }
+.sidebar a.router-link-active {
+  color: var(--gold); border-left-color: var(--gold); background: var(--panel-2);
+}
+.main { flex: 1; padding: 20px 24px; max-width: 1400px; }
+h2.page-title { color: var(--gold); margin: 4px 0 18px; font-size: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px;
+}
+.card .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.card .value { font-size: 22px; font-weight: 700; color: var(--text); }
+.card .value.gold { color: var(--gold-soft); }
+.card .value.green { color: var(--green); }
+.card .value.red { color: var(--red); }
+.card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; margin-bottom: 16px;
+}
+.panel h3 { margin: 0 0 12px; color: var(--gold); font-size: 15px; }
+.badge-ok { color: var(--green); font-weight: 700; }
+.badge-err { color: var(--red); font-weight: 700; }
+.badge-warn { color: var(--orange); font-weight: 700; }
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+table.data { width: 100%; border-collapse: collapse; }
+table.data th, table.data td {
+  padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
+}
+table.data th { color: var(--gold); font-weight: 600; cursor: pointer; user-select: none; }
+table.data tr:hover td { background: var(--panel-2); }
+.num-ball {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--gold); color: #111; font-weight: 700;
+  margin-right: 4px; font-size: 12px;
+}
+.num-ball.actual { background: var(--green); color: #fff; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--muted); }
+.pager button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 5px; cursor: pointer;
+}
+.pager button:disabled { opacity: 0.4; cursor: default; }
+input, select {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; padding: 6px 10px;
+}
+.stat-hbar { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.stat-hbar .bar { background: var(--panel-2); height: 14px; flex: 1; border-radius: 3px; overflow: hidden; }
+.stat-hbar .fill { background: var(--gold); height: 100%; }
+.stat-hbar .num { width: 32px; color: var(--muted); font-size: 12px; }
+.alert-line { padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; }
+.alert-critical { background: rgba(224,82,82,0.12); border: 1px solid var(--red); }
+.alert-warning { background: rgba(224,154,63,0.12); border: 1px solid var(--orange); }
+.flex { display: flex; gap: 12px; flex-wrap: wrap; }
+.mb0 { margin-bottom: 0; }
+@media (max-width: 800px) {
+  .sidebar { width: 60px; min-width: 60px; }
+  .sidebar .brand { display: none; }
+  .sidebar a span { display: none; }
+  .main { padding: 14px; }
+}

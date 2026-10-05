@@ -18,6 +18,7 @@ dependencies = [
 lottery-backfill = "lottery_intelligence_platform.backfill_cli:main"
 lottery-dataset-snapshot = "lottery_intelligence_platform.dataset_cli:main"
 lottery-api = "lottery_intelligence_platform.api:main"
+lottery-secondary-import = "lottery_intelligence_platform.secondary_source:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
