@@ -311,6 +311,8 @@ def handle_audit_data_quality(connection: Any, run: JobRun) -> Mapping[str, Any]
     if missing:
         _alert(connection, "MISSING_DRAWS", "WARNING",
                {"count": missing, "draw_types": [r[0] for r in anomalies if r[2]]})
+    else:
+        _auto_resolve(connection, run, "MISSING_DRAWS")
     if structural:
         _alert(connection, "DRAW_QUALITY_ANOMALY", "WARNING",
                {"count": structural,
@@ -319,7 +321,28 @@ def handle_audit_data_quality(connection: Any, run: JobRun) -> Mapping[str, Any]
                      "duplicate": r[4], "out_of_range": r[5]}
                     for r in anomalies if r[6] - r[2] > 0
                 ]})
+    else:
+        _auto_resolve(connection, run, "DRAW_QUALITY_ANOMALY")
     return report
+
+
+def _auto_resolve(connection: Any, run: JobRun, code: str) -> None:
+    """Acknowledge open alerts of `code` once the condition has cleared.
+
+    Alert content is immutable; `acknowledged_at` is the resolution marker.
+    An event preserves which alerts were auto-resolved and by which run."""
+    resolved = connection.execute(
+        """UPDATE ops.alerts SET acknowledged_at = CURRENT_TIMESTAMP
+           WHERE code = %s AND acknowledged_at IS NULL
+           RETURNING alert_id""",
+        (code,),
+    ).fetchall()
+    if resolved:
+        emit_event(
+            connection, "ALERT_AUTO_RESOLVED",
+            {"code": code, "alert_ids": [str(r[0]) for r in resolved]},
+            job_run_id=run.job_run_id,
+        )
 
 
 def handle_export_evidence(connection: Any, run: JobRun) -> Mapping[str, Any]:
