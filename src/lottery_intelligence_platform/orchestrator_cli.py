@@ -73,6 +73,8 @@ def _parser() -> argparse.ArgumentParser:
     run_job.add_argument("code")
     run_job.add_argument("--key", help="idempotency key for the run")
     sub.add_parser("health", help="print orchestrator health JSON")
+    sub.add_parser("register-lab-models",
+                   help="register lab pickers and create the extended cohort version")
     return parser
 
 
@@ -100,6 +102,14 @@ def main() -> int:
             return 0
         if args.command == "health":
             print(json.dumps(orchestrator_health(connection), default=str, indent=2))
+            return 0
+        if args.command == "register-lab-models":
+            from lottery_intelligence_platform.prediction_generation import (
+                register_lab_cohort,
+            )
+            result = register_lab_cohort(connection)
+            connection.commit()
+            print(json.dumps(result, default=str))
             return 0
     return 2
 
