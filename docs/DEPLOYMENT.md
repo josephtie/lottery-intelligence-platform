@@ -1,8 +1,32 @@
 # VPS deployment
 
-Status: **prepared, not deployed**. These artifacts let the application tier
-run on any Docker host, independent of the Mac. Nothing here is live until the
-steps below are executed and verified.
+Status: **deployed** (2026-10-05, `83.171.249.150`, compose project `lottery`).
+
+Two variants are provided:
+
+| File | Mode |
+|---|---|
+| `infrastructure/vps/compose.selfhosted.yaml` | **deployed variant** — all-in-one: dedicated `postgres:16` + `rustfs` (S3-compatible object store; `minio/*` images were pulled from Docker Hub Oct 2025) + scheduler + API, all state in named volumes |
+| `infrastructure/vps/compose.yaml` | external-state mode — app tier only, for managed Postgres/S3 |
+
+The VPS already runs other stacks — ports in use include 8080–8090, 5433–54432.
+The stack therefore binds: API `0.0.0.0:8095` (Bearer-token protected — token is
+set once in the console), Postgres `127.0.0.1:5434`, RustFS `127.0.0.1:19000/19001`
+(loopback only).
+
+Secrets live in `infrastructure/vps/.env.selfhosted` on the operator machine
+(never committed; deploy remote via `DOCKER_HOST=ssh://root@<vps>` —
+build context and compose commands travel over SSH, no clone needed on the VPS).
+
+Self-hosted deploy:
+
+```bash
+COMPOSE="docker compose -f infrastructure/vps/compose.selfhosted.yaml --env-file .env.selfhosted"
+$COMPOSE up -d postgres minio
+$COMPOSE --profile bootstrap run --rm createbuckets   # s3 mb lottery-raw
+$COMPOSE --profile bootstrap run --rm bootstrap       # migrations
+$COMPOSE up -d                                        # scheduler + api
+```
 
 ## Architecture
 

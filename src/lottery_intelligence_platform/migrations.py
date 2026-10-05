@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 from psycopg import ClientCursor
@@ -11,7 +12,15 @@ class MigrationChecksumError(RuntimeError):
 
 
 def default_migrations_directory() -> Path:
-    return Path(__file__).resolve().parents[2] / "infrastructure" / "postgres" / "migrations"
+    override = os.environ.get("LOTTERY_MIGRATIONS_DIR")
+    if override:
+        return Path(override)
+    # Source checkout: <repo>/src/<pkg>/migrations.py → <repo>/infrastructure/...
+    repo_root = Path(__file__).resolve().parents[2] / "infrastructure" / "postgres" / "migrations"
+    if repo_root.is_dir():
+        return repo_root
+    # Installed image: migrations copied to /app/infrastructure/...
+    return Path("/app/infrastructure/postgres/migrations")
 
 
 def apply_migrations(connection, migrations_directory: Path | None = None) -> list[str]:

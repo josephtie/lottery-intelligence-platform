@@ -587,27 +587,43 @@ class ApiHandler(BaseHTTPRequestHandler):
                 rows.append(lab_matrix.candidate_for(result))
         return {"games_evaluated": len(rows), "candidates": rows}
 
+    @staticmethod
+    def _dist_dir() -> Path:
+        override = os.environ.get("LOTTERY_FRONTEND_DIST")
+        if override:
+            return Path(override)
+        # Source checkout: <repo>/src/<pkg>/api.py → <repo>/frontend/dist
+        repo = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+        if repo.is_dir():
+            return repo
+        return Path("/app/frontend/dist")  # installed image layout
+
+    def _serve_static(self, path: str) -> None:
+        if path == "/console":
+            self._send_file(Path(__file__).with_name("console.html"))
+            return
+        dist = self._dist_dir()
+        if not dist.is_dir():
+            self._send_file(Path(__file__).with_name("console.html"))
+            return
+        target = (dist / path.lstrip("/")).resolve()
+        # SPA history-mode fallback: unknown paths get index.html; block traversal
+        if path != "/" and target.is_file() and target.is_relative_to(dist.resolve()):
+            self._send_file(target)
+        else:
+            self._send_file(dist / "index.html")
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
+        if not url.path.startswith("/api"):
+            self._serve_static(url.path)
+            return
         if self.token is not None:
             auth = self.headers.get("Authorization", "")
             if auth != f"Bearer {self.token}":
                 self._send({"error": "unauthorized"}, 401)
                 return
         try:
-            if url.path == "/console":
-                self._send_file(Path(__file__).with_name("console.html"))
-                return
-            if url.path == "/" or url.path.startswith("/assets/"):
-                dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-                target = dist / (url.path.lstrip("/") or "index.html")
-                if url.path.startswith("/assets/") and not target.is_file():
-                    self._send({"error": "not found"}, 404)
-                    return
-                if url.path == "/" and not dist.is_dir():
-                    target = Path(__file__).with_name("console.html")
-                self._send_file(target if target.is_file() else dist / "index.html")
-                return
             if url.path == "/api/predictions":
                 qs = parse_qs(url.query)
                 status = (qs.get("status") or [None])[0]

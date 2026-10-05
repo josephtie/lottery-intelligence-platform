@@ -86,6 +86,12 @@ def main() -> int:
     if args.command == "run-scheduler":
         return _run_scheduler(args.interval)
     with _connect() as connection:
+        if args.command == "migrate":
+            from lottery_intelligence_platform.migrations import apply_migrations
+            applied = apply_migrations(connection)
+            connection.commit()
+            print(json.dumps({"applied": applied}))
+            return 0
         ensure_jobs(connection)
         connection.commit()
         if args.command == "run-due":
@@ -112,12 +118,6 @@ def main() -> int:
             result = register_lab_cohort(connection)
             connection.commit()
             print(json.dumps(result, default=str))
-            return 0
-        if args.command == "migrate":
-            from lottery_intelligence_platform.migrations import apply_migrations
-            applied = apply_migrations(connection)
-            connection.commit()
-            print(json.dumps({"applied": applied}))
             return 0
     return 2
 

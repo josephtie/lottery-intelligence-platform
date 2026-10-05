@@ -1,0 +1,143 @@
+# VPS self-hosted stack — all-in-one: PostgreSQL + MinIO + scheduler + API.
+#
+# Deliberately separate compose file from compose.yaml (external-state mode):
+# here the stack owns its Postgres/MinIO volumes, matching this VPS's
+# convention (each stack has its own DB container). Volumes survive stack
+# teardown; only `down -v` destroys data.
+#
+#   docker compose -f infrastructure/vps/compose.selfhosted.yaml \
+#     --env-file .env.selfhosted --profile bootstrap run --rm bootstrap
+#   docker compose -f infrastructure/vps/compose.selfhosted.yaml \
+#     --env-file .env.selfhosted up -d
+
+name: lottery
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lottery_platform
+      POSTGRES_USER: lottery_app
+      POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD}
+    volumes:
+      - lottery-pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${LOTTERY_PG_PORT:-5434}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lottery_app -d lottery_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible object store. MinIO images were removed from Docker Hub
+  # (Oct 2025) and quay.io/minio requires auth — RustFS is the drop-in
+  # substitute actually published there.
+  minio:
+    image: rustfs/rustfs:latest
+    command: rustfs /data --console-enable --console-address ":9001"
+    environment:
+      RUSTFS_ACCESS_KEY: ${LOTTERY_S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY}
+    volumes:
+      - lottery-minio:/data
+    ports:
+      - "127.0.0.1:${LOTTERY_S3_API_PORT:-19000}:9000"
+      - "127.0.0.1:${LOTTERY_S3_CONSOLE_PORT:-19001}:9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:9000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  createbuckets:
+    image: amazon/aws-cli:latest
+    profiles: ["bootstrap"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "aws --endpoint-url http://minio:9000 s3 mb s3://$${LOTTERY_S3_BUCKET} || true"
+    environment:
+      AWS_ACCESS_KEY_ID: ${LOTTERY_S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${LOTTERY_S3_SECRET_KEY}
+      LOTTERY_S3_BUCKET: ${LOTTERY_S3_BUCKET}
+
+  bootstrap:
+    # One-shot: SQL migrations + default job catalogue on a fresh database.
+    build: ../..
+    profiles: ["bootstrap"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &appenv
+      LOTTERY_DATABASE_HOST: postgres
+      LOTTERY_DATABASE_PORT: "5432"
+      LOTTERY_DATABASE_NAME: lottery_platform
+      LOTTERY_DATABASE_USER: lottery_app
+      PGPASSWORD: ${LOTTERY_DATABASE_PASSWORD}
+      LOTTERY_S3_ENDPOINT_URL: http://minio:9000
+      LOTTERY_S3_BUCKET: ${LOTTERY_S3_BUCKET}
+      LOTTERY_S3_REGION: us-east-1
+      LOTTERY_S3_ACCESS_KEY: ${LOTTERY_S3_ACCESS_KEY}
+      LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY}
+      LOTTERY_BACKUP_DIR: /app/backups
+      LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN}
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.orchestrator_cli
+      - migrate
+
+  scheduler:
+    build: ../..
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: *appenv
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.orchestrator_cli
+      - run-scheduler
+      - --interval
+      - "30"
+    volumes:
+      - lottery-backups:/app/backups
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build: ../..
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *appenv
+    command:
+      - python
+      - -m
+      - lottery_intelligence_platform.api
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8090"
+    ports:
+      - "${LOTTERY_API_PORT:-8095}:8090"  # Bearer-token protected; front with TLS proxy later
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  lottery-pgdata:
+  lottery-minio:
+  lottery-backups:
