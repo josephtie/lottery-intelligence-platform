@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
@@ -508,6 +508,77 @@ def handle_verify_backups(connection: Any, run: JobRun) -> Mapping[str, Any]:
     return _run_script(connection, run, "verify_backups.sh")
 
 
+# Critical periodic jobs and the maximum tolerated silence, in minutes.
+# collect/settle fire every 5 min; predictions twice hourly. A missed
+# window means the scheduler or the pipeline is wedged — the worst kind
+# of failure because it is silent.
+FRESHNESS_THRESHOLDS_MINUTES: dict[str, int] = {
+    "collect_results": 30,
+    "settle_pending_draws": 30,
+    "generate_predictions": 60,
+}
+
+
+def handle_check_job_freshness(connection: Any, run: JobRun) -> Mapping[str, Any]:
+    """Watchdog: alert when a critical job has no recent SUCCEEDED run.
+
+    Covers silent pipeline stalls (scheduler wedged, handler looping into
+    retry). A fully dead scheduler is covered by the Docker healthcheck on
+    the heartbeat file instead — this job only runs while the loop lives.
+    Thresholds overridable via run details ``freshness_minutes``.
+    """
+    thresholds = dict(FRESHNESS_THRESHOLDS_MINUTES)
+    thresholds.update(run.details.get("freshness_minutes") or {})
+    now = datetime.now(timezone.utc)
+    stale = []
+    for code, minutes in sorted(thresholds.items()):
+        row = connection.execute(
+            """SELECT MAX(jr.finished_at)
+               FROM ops.job_runs jr
+               JOIN ops.jobs j ON j.job_id = jr.job_id
+               WHERE j.code = %s AND jr.status = 'SUCCEEDED'""",
+            (code,),
+        ).fetchone()
+        last = row[0] if row else None
+        age = (now - last.replace(tzinfo=timezone.utc)).total_seconds() / 60 \
+            if last else None
+        if last is None or age > minutes:
+            stale.append({
+                "job": code,
+                "last_succeeded": str(last) if last else None,
+                "age_minutes": round(age, 1) if age is not None else None,
+                "threshold_minutes": minutes,
+            })
+    dead = connection.execute(
+        """SELECT j.code, COUNT(*)
+           FROM ops.job_runs jr
+           JOIN ops.jobs j ON j.job_id = jr.job_id
+           WHERE jr.status = 'DEAD'
+             AND jr.finished_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+           GROUP BY j.code"""
+    ).fetchall()
+    report = {
+        "stale_jobs": stale,
+        "dead_runs_24h": [{"job": r[0], "dead_runs": r[1]} for r in dead],
+        "thresholds_minutes": thresholds,
+    }
+    emit_event(connection, "JOB_FRESHNESS_REPORT", report,
+               job_run_id=run.job_run_id)
+    if stale:
+        severity = "CRITICAL" if any(
+            s["job"] == "collect_results" for s in stale) else "WARNING"
+        _alert(connection, "JOB_FRESHNESS_STALE", severity,
+               {"stale_jobs": stale})
+    else:
+        _auto_resolve(connection, run, "JOB_FRESHNESS_STALE")
+    if dead:
+        _alert(connection, "JOB_RUNS_DEAD", "WARNING",
+               {"dead_runs_24h": report["dead_runs_24h"]})
+    else:
+        _auto_resolve(connection, run, "JOB_RUNS_DEAD")
+    return report
+
+
 HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "collect_results": handle_collect_results,
     "settle_pending_draws": handle_settle_pending_draws,
@@ -519,6 +590,7 @@ HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "backup_postgresql": handle_backup_postgresql,
     "backup_raw_storage": handle_backup_raw_storage,
     "verify_backups": handle_verify_backups,
+    "check_job_freshness": handle_check_job_freshness,
 }
 
 

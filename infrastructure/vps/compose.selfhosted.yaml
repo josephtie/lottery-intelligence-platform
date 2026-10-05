@@ -24,6 +24,11 @@ services:
     ports:
       - "127.0.0.1:${LOTTERY_PG_PORT:-5434}:5432"
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lottery_app -d lottery_platform"]
       interval: 10s
@@ -45,6 +50,11 @@ services:
       - "127.0.0.1:${LOTTERY_S3_API_PORT:-19000}:9000"
       - "127.0.0.1:${LOTTERY_S3_CONSOLE_PORT:-19001}:9001"
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://127.0.0.1:9000/health || exit 1"]
       interval: 15s
@@ -110,6 +120,23 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # The loop writes /tmp/scheduler_heartbeat every tick — a stale file
+    # means the daemon is wedged even if the process still lives.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,time,sys; p='/tmp/scheduler_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<300 else 1)"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   api:
     build: ../..
@@ -130,6 +157,11 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5).status == 200 else 1)"]
       interval: 30s

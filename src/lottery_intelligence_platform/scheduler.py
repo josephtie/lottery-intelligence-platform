@@ -80,6 +80,12 @@ DEFAULT_JOB_DEFS: tuple[dict[str, Any], ...] = (
         "schedule_cron": "0 3 * * *",
         "config": {},
     },
+    {
+        "code": "check_job_freshness",
+        "kind": "MAINTENANCE",
+        "schedule_cron": "*/15 * * * *",
+        "config": {},
+    },
 )
 
 

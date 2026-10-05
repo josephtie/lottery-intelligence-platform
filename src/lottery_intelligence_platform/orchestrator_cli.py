@@ -42,9 +42,17 @@ def _run_scheduler(interval: int) -> int:
     import time
     from datetime import datetime, timezone
 
+    heartbeat = Path(os.environ.get(
+        "LOTTERY_HEARTBEAT_FILE", "/tmp/scheduler_heartbeat"))
     connection = _connect(autocommit=True)
     ensure_jobs(connection)  # fresh database: register the default job specs
     while True:
+        # Heartbeat before the tick: proves the loop is alive to the Docker
+        # healthcheck even when the database is unreachable.
+        try:
+            heartbeat.write_text(datetime.now(timezone.utc).isoformat())
+        except OSError:
+            pass
         try:
             with connection.transaction():
                 enqueued = enqueue_due(connection, datetime.now(timezone.utc))
