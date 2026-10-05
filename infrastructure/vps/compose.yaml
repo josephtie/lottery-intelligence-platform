@@ -44,14 +44,14 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8080"
+      - "8090"
     ports:
-      - "127.0.0.1:${LOTTERY_API_PORT:-8080}:8080"  # front with your reverse proxy
+      - "127.0.0.1:${LOTTERY_API_PORT:-8090}:8090"  # front with your reverse proxy
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5).status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

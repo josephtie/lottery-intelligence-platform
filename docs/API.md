@@ -4,7 +4,7 @@ Stdlib-only HTTP server (`lottery_intelligence_platform.api`) exposing the
 platform's live views. Read-only: no write endpoints, localhost bind.
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m lottery_intelligence_platform.api --port 8080
+PYTHONPATH=src .venv/bin/python -m lottery_intelligence_platform.api --port 8090
 # LOTTERY_DB_DSN overrides the default local DSN.
 ```
 

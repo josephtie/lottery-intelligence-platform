@@ -43,7 +43,7 @@ docker compose -f infrastructure/vps/compose.yaml --env-file infrastructure/vps/
 ```bash
 docker compose ... ps                                  # both services healthy
 docker compose ... exec scheduler python -m lottery_intelligence_platform.orchestrator_cli health
-curl -H "Authorization: Bearer $LOTTERY_API_TOKEN" http://127.0.0.1:8080/api/health
+curl -H "Authorization: Bearer $LOTTERY_API_TOKEN" http://127.0.0.1:8090/api/health
 # within ~5 min: collect_results runs appear in ops.job_runs via `cron:` keys
 ```
 

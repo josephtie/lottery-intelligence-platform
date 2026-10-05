@@ -12,12 +12,12 @@ self-contained `console.html` at `/console` when it isn't.
 ```bash
 cd frontend
 npm ci            # reproducible install (package-lock.json committed)
-npm run dev       # dev server :8792, proxies /api → :8080
+npm run dev       # dev server :8792, proxies /api → :8090
 npm run build     # production build → dist/
 ```
 
 ```bash
-lottery-api --port 8080        # serves dist at /, console.html at /console
+lottery-api --port 8090        # serves dist at /, console.html at /console
 ```
 
 ## Authentication
@@ -33,7 +33,7 @@ entered by the operator at runtime only.
 |---|---|---|
 | `LOTTERY_API_TOKEN` | API process | enables Bearer auth; recommended on any non-loopback bind |
 | `LOTTERY_DB_DSN` / `LOTTERY_DATABASE_*` | API process | PostgreSQL connection |
-| `LOTTERY_API_PORT` | VPS compose | host port mapped to container 8080 |
+| `LOTTERY_API_PORT` | VPS compose | host port mapped to container 8090 |
 
 ## Screens ↔ API
 
@@ -79,7 +79,7 @@ or run a `npm run build` stage. Token is mandatory beyond loopback.
 ## Verification checklist
 
 - `npm run build` completes (warning about chunk size is cosmetic).
-- `curl -s localhost:8080/` returns the SPA HTML.
-- `curl -s localhost:8080/api/health` returns JSON.
+- `curl -s localhost:8090/` returns the SPA HTML.
+- `curl -s localhost:8090/api/health` returns JSON.
 - Without token (auth enabled): API returns 401, UI shows the token prompt.
 - `/console` always serves the dependency-free fallback page.

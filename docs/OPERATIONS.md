@@ -11,7 +11,7 @@ jobs, stdlib read API. No Kubernetes — not justified at this scale.
 | MinIO | local compose (`raw-storage`) | raw payloads, ports 19000/19001 |
 | Cron | host `crontab` | `infrastructure/cron/lottery.cron`, `CRON_TZ=Africa/Abidjan` |
 | Scheduler | cron `run-due` every 5 min | claims due `ops.jobs` via `FOR UPDATE SKIP LOCKED` |
-| Read API | on demand | `lottery-api --port 8080` (Bearer auth if `LOTTERY_API_TOKEN` set) |
+| Read API | on demand | `lottery-api --port 8090` (Bearer auth if `LOTTERY_API_TOKEN` set) |
 
 ## Backup & restore
 

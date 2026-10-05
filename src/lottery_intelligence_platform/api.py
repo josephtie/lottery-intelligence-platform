@@ -5,7 +5,7 @@ Endpoints expose exactly what the research views expose — prospective
 metrics, predictions, coverage, findings, outcomes, job health — never
 write paths.
 
-    PYTHONPATH=src python -m lottery_intelligence_platform.api --port 8080
+    PYTHONPATH=src python -m lottery_intelligence_platform.api --port 8090
 """
 
 from __future__ import annotations
@@ -356,7 +356,7 @@ class ApiHandler(BaseHTTPRequestHandler):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lottery platform read API")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--dsn", default=os.environ.get("LOTTERY_DB_DSN", DEFAULT_DSN))
     args = parser.parse_args()
     ApiHandler.dsn = args.dsn
