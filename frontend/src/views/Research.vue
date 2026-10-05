@@ -1,7 +1,7 @@
 <template>
   <h2 class="page-title">🧪 Laboratoire de recherche</h2>
 
-  <ReplayLab />
+  <ReplayLab :show5="true" />
 
   <div class="panel">
     <h3>Cohortes prospectives</h3>

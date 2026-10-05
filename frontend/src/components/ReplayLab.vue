@@ -44,8 +44,12 @@
 
       <table class="data mb0" v-if="replay.models?.length">
         <tr>
-          <th>Modèle</th><th>Numéros prédits</th><th>Hits</th>
-          <th>Numéros touchés</th><th v-for="v in turboCols" :key="v">{{ v.replace('turbo_','Turbo ') }}</th>
+          <th>Modèle</th><th>Turbo (2)</th><th>Hits</th>
+          <template v-if="show5">
+            <th>Prédits (5)</th><th>Hits 5</th><th>Touchés</th>
+          </template>
+          <template v-else><th>Numéros touchés</th></template>
+          <th v-for="v in turboCols" :key="v">{{ v.replace('turbo_','Turbo ') }}</th>
         </tr>
         <tr v-for="m in replay.models" :key="m.model_code"
             :class="{ 'baseline-row': m.model_code === 'null_model_benchmark' }">
@@ -55,8 +59,19 @@
           <td class="mono" :class="m.hits > 0 ? 'badge-ok' : ''">
             {{ m.hits != null ? m.hits + '/' + m.predicted.length : '—' }}
           </td>
-          <td><span v-for="n in m.hit_numbers ?? []" :key="n" class="num-ball actual">{{ n }}</span>
-              <span v-if="!m.hit_numbers?.length" class="sub">—</span></td>
+          <template v-if="show5">
+            <td><span v-for="(n, i) in m.predicted_5" :key="i" class="num-ball five-ball"
+                      :class="{ hit: m.hit_numbers_5?.includes(n) }">{{ n }}</span></td>
+            <td class="mono" :class="m.hits_5 > 0 ? 'badge-ok' : ''">
+              {{ m.hits_5 != null ? m.hits_5 + '/5' : '—' }}
+            </td>
+            <td><span v-for="n in m.hit_numbers_5 ?? []" :key="n" class="num-ball actual">{{ n }}</span>
+                <span v-if="!m.hit_numbers_5?.length" class="sub">—</span></td>
+          </template>
+          <template v-else>
+            <td><span v-for="n in m.hit_numbers ?? []" :key="n" class="num-ball actual">{{ n }}</span>
+                <span v-if="!m.hit_numbers?.length" class="sub">—</span></td>
+          </template>
           <td v-for="v in turboCols" :key="v" class="mono" style="font-size:11px">
             <template v-if="m.turbo?.[v]">
               <span :class="m.turbo[v].hit ? 'badge-ok' : 'badge-err'">
@@ -73,6 +88,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import api from '../api'
+
+defineProps<{ show5?: boolean }>()
 
 const turboCols = ['turbo_2', 'turbo_3', 'turbo_4', 'turbo_5']
 const today = new Date().toISOString().slice(0, 10)
@@ -145,5 +162,7 @@ onMounted(async () => {
 .rvalue.gold { color: var(--gold-soft); }
 .rballs { padding: 4px 0; }
 .num-ball.hit { outline: 2px solid var(--green); }
+.five-ball { background: var(--panel); color: var(--gold-soft); border: 1px solid var(--gold); }
+.five-ball.hit { background: var(--green); color: #fff; border-color: var(--green); }
 .baseline-row td { opacity: 0.7; font-style: italic; }
 </style>

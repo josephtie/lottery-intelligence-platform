@@ -379,14 +379,20 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if picker is None:
                     continue
                 predicted = picker(conn, draw_type_id, target, params or {}, seed)
+                predicted_5 = picker(
+                    conn, draw_type_id, target,
+                    {**dict(params or {}), "pick_count": 5}, seed)
                 entry: dict[str, Any] = {
                     "model_code": code,
                     "model_version": version,
                     "predicted": predicted,
+                    "predicted_5": predicted_5,
                 }
                 if winning:
                     entry["hit_numbers"] = sorted(set(predicted) & set(winning))
                     entry["hits"] = len(entry["hit_numbers"])
+                    entry["hit_numbers_5"] = sorted(set(predicted_5) & set(winning))
+                    entry["hits_5"] = len(entry["hit_numbers_5"])
                     entry["positional_hits"] = positional_hit_counts(predicted, winning)
                     if multipliers:
                         entry["turbo"] = turbo_settlement(
