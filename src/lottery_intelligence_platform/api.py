@@ -263,7 +263,7 @@ PREDICTIONS_SQL = """
     FROM research.predictions p
     JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
     JOIN catalog.draw_types dt ON dt.draw_type_id = p.draw_type_id
-    WHERE (%(status)s IS NULL OR p.status = %(status)s)
+    WHERE (%(status)s::text IS NULL OR p.status = %(status)s)
     ORDER BY p.scheduled_date DESC, p.created_at DESC
     LIMIT %(limit)s
 """
