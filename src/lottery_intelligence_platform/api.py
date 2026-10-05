@@ -277,11 +277,15 @@ ROUTES: dict[str, str] = {
 PREDICTIONS_SQL = """
     SELECT p.prediction_id, mv.code AS model_code, dt.display_name AS draw_type,
            p.scheduled_date, p.predicted_numbers, p.status, p.stake,
-           p.created_at
+           p.created_at, o.winning_numbers, o.hit_count, o.settled_at
     FROM research.predictions p
     JOIN research.model_versions mv ON mv.model_version_id = p.model_version_id
     JOIN catalog.draw_types dt ON dt.draw_type_id = p.draw_type_id
+    LEFT JOIN research.prediction_outcomes o ON o.prediction_id = p.prediction_id
     WHERE (%(status)s::text IS NULL OR p.status = %(status)s)
+      AND (%(date)s::date IS NULL OR p.scheduled_date = %(date)s)
+      AND (%(from)s::date IS NULL OR p.scheduled_date >= %(from)s)
+      AND (%(to)s::date IS NULL OR p.scheduled_date <= %(to)s)
     ORDER BY p.scheduled_date DESC, p.created_at DESC
     LIMIT %(limit)s
 """
@@ -526,9 +530,21 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if status is not None and status not in ("PENDING", "LOCKED", "SCORED", "INVALID"):
                     self._send({"error": "invalid status"}, 400)
                     return
+                date_from = (qs.get("from") or [None])[0]
+                date_to = (qs.get("to") or [None])[0]
+                day = (qs.get("date") or [None])[0]
+                for raw in (day, date_from, date_to):
+                    if raw is not None:
+                        try:
+                            date.fromisoformat(raw)
+                        except ValueError:
+                            self._send({"error": "dates must be YYYY-MM-DD"}, 400)
+                            return
                 limit = min(int((qs.get("limit") or ["100"])[0]), 500)
                 self._send({"predictions": self._query(
-                    PREDICTIONS_SQL, {"status": status, "limit": limit})})
+                    PREDICTIONS_SQL, {
+                        "status": status, "date": day,
+                        "from": date_from, "to": date_to, "limit": limit})})
                 return
             if url.path == "/api/lab/replay":
                 self._send(self._lab_replay(parse_qs(url.query)))
