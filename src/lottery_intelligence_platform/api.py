@@ -262,6 +262,14 @@ ROUTES: dict[str, str] = {
         FROM catalog.draw_types dt
         ORDER BY dt.display_name, dt.draw_type_id
     """,
+    "/api/lab/draw-types-on-date": """
+        SELECT DISTINCT ON (dt.display_name) dt.code, dt.display_name,
+               d.status AS draw_status
+        FROM core.draws d
+        JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+        WHERE d.scheduled_date = %(date)s
+        ORDER BY dt.display_name, d.status DESC
+    """,
     "/api/cohorts": """
         SELECT cv.cohort_version_id, c.code, c.display_name, cv.version,
                cv.definition, cv.effective_from, cv.created_at,
@@ -545,6 +553,19 @@ class ApiHandler(BaseHTTPRequestHandler):
                     PREDICTIONS_SQL, {
                         "status": status, "date": day,
                         "from": date_from, "to": date_to, "limit": limit})})
+                return
+            if url.path == "/api/lab/draw-types-on-date":
+                day = (parse_qs(url.query).get("date") or [None])[0]
+                if day is None:
+                    self._send({"error": "date is required"}, 400)
+                    return
+                try:
+                    date.fromisoformat(day)
+                except ValueError:
+                    self._send({"error": "date must be YYYY-MM-DD"}, 400)
+                    return
+                self._send({"data": self._query(
+                    ROUTES["/api/lab/draw-types-on-date"], {"date": day})})
                 return
             if url.path == "/api/lab/replay":
                 self._send(self._lab_replay(parse_qs(url.query)))

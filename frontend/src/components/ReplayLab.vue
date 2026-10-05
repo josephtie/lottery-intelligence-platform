@@ -6,13 +6,16 @@
       au tirage — reproductible, sans fuite temporelle. Résultat simulé, pas un gain réel.
     </div>
     <div class="filters">
-      <input type="date" v-model="date" :max="today" @change="load" />
+      <input type="date" v-model="date" :max="today" @change="onDate" />
+      <span v-if="!types.length" class="sub">Aucun jeu tiré ce jour-là.</span>
     </div>
     <div class="chips">
       <button v-for="t in types" :key="t.code + t.display_name" class="chip"
               :class="{ active: drawType === t.display_name }"
               @click="drawType = t.display_name; load()">
-        {{ t.display_name }} <span class="chip-n">{{ t.settled_draws }}</span>
+        {{ t.display_name }}
+        <span class="chip-n" :class="{ pending: t.draw_status !== 'SETTLED' }">
+          {{ t.draw_status === 'SETTLED' ? '' : t.draw_status }}</span>
       </button>
     </div>
 
@@ -96,17 +99,31 @@ async function load() {
   } finally { loading.value = false }
 }
 
+async function loadTypesForDate() {
+  try {
+    const res = await api.get('/api/lab/draw-types-on-date', {
+      params: { date: date.value } })
+    types.value = res.data.data ?? []
+    if (!types.value.find((t: any) => t.display_name === drawType.value))
+      drawType.value = types.value[0]?.display_name ?? ''
+  } catch { types.value = [] }
+}
+
+async function onDate() {
+  replay.value = null
+  await loadTypesForDate()
+  await load()
+}
+
 onMounted(async () => {
+  // dernière date avec tirage réel pour un premier affichage utile
   try {
     const res = await api.get('/api/lab/draw-types')
-    types.value = (res.data.data ?? []).filter((t: any) => t.settled_draws > 0)
-    if (types.value.length) {
-      drawType.value = types.value[0].display_name
-      // dernière date avec tirage réel pour un premier affichage utile
-      date.value = types.value[0].last_draw ?? today
-      await load()
-    }
-  } catch { /* la vue reste vide, l'utilisateur choisit */ }
+    const all = (res.data.data ?? []).filter((t: any) => t.settled_draws > 0)
+    if (all.length) date.value = all[0].last_draw ?? today
+  } catch { /* l'utilisateur choisit */ }
+  await loadTypesForDate()
+  await load()
 })
 </script>
 
@@ -119,6 +136,8 @@ onMounted(async () => {
 .chip:hover { color: var(--text); }
 .chip.active { background: var(--gold); color: #111; font-weight: 700; border-color: var(--gold); }
 .chip-n { opacity: 0.7; font-size: 10px; }
+.chip-n.pending { color: var(--orange); opacity: 1; }
+.chip.active .chip-n.pending { color: #111; }
 .replay-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .rcard { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .rlabel { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
