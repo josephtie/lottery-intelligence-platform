@@ -1,7 +1,8 @@
 import axios from 'axios'
 import { useTagsViewStore } from './stores/tagsView'
 
-const api = axios.create({ baseURL: '/api' })
+// baseURL '/' — all calls carry their full '/api/...' path.
+const api = axios.create({ baseURL: '/' })
 
 // Token d'auth si défini côté backend (LOTTERY_API_TOKEN)
 const token = localStorage.getItem('lottery_token')
