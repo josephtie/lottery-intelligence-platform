@@ -24,6 +24,7 @@ from uuid import UUID
 
 import psycopg
 
+from lottery_intelligence_platform import lab_matrix
 from lottery_intelligence_platform.prediction_generation import PICKERS
 from lottery_intelligence_platform.settlement import (
     DEFAULT_TURBO_STAKE,
@@ -517,6 +518,59 @@ class ApiHandler(BaseHTTPRequestHandler):
             "top_pairs": pairs,
         }
 
+    _matrix_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_matrix(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        cache_key = draw_type
+        if cache_key in self._matrix_cache:
+            return self._matrix_cache[cache_key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            result = lab_matrix.evaluate_game(conn, dt_row[0], dt_row[1])
+            if result is None:
+                return {"error": "not enough settled draws",
+                        "minimum": lab_matrix.MIN_DRAWS + lab_matrix.MIN_WF}
+            result["candidate"] = lab_matrix.candidate_for(result)
+            for name, entry in result["models"].items():
+                entry["stage"] = lab_matrix.stage_of(entry)
+                entry["robustness"] = lab_matrix.robustness_score(entry)[0]
+        self._matrix_cache[cache_key] = result
+        return result
+
+    def _lab_candidates(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        top = min(int((qs.get("top") or ["8"])[0]), 30)
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            games = conn.execute(
+                """SELECT DISTINCT ON (dt.display_name) dt.draw_type_id, dt.display_name
+                   FROM catalog.draw_types dt
+                   JOIN core.draws d ON d.draw_type_id = dt.draw_type_id
+                     AND d.status = 'SETTLED'
+                   GROUP BY dt.display_name, dt.draw_type_id
+                   HAVING count(d.draw_id) >= %s
+                   ORDER BY dt.display_name, count(d.draw_id) DESC
+                   LIMIT %s""",
+                (lab_matrix.MIN_DRAWS + lab_matrix.MIN_WF, top),
+            ).fetchall()
+            rows = []
+            for draw_type_id, display_name in games:
+                cached = self._matrix_cache.get(display_name)
+                result = cached or lab_matrix.evaluate_game(
+                    conn, draw_type_id, display_name)
+                if result is None:
+                    continue
+                self._matrix_cache.setdefault(display_name, result)
+                rows.append(lab_matrix.candidate_for(result))
+        return {"games_evaluated": len(rows), "candidates": rows}
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if self.token is not None:
@@ -572,6 +626,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                     return
                 self._send({"data": self._query(
                     ROUTES["/api/lab/draw-types-on-date"], {"date": day})})
+                return
+            if url.path == "/api/lab/matrix":
+                self._send(self._lab_matrix(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/candidates":
+                self._send(self._lab_candidates(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/replay":
                 self._send(self._lab_replay(parse_qs(url.query)))

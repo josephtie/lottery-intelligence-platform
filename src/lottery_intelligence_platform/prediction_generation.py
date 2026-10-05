@@ -17,7 +17,6 @@ anti-leakage barrier.
 from __future__ import annotations
 
 import hashlib
-import math
 import random
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -296,214 +295,45 @@ def _history(
 
 
 # ---------------------------------------------------------------------------
-# Lab pickers — ported from lottery-statistics-expert models/models.py, with
-# N_PICKS parameterised by params.pick_count. Deterministic except the
-# stochastic ones, seeded by (seed, draw_type, target) for reproducibility.
+# Lab pickers — deterministic cores live in lab_models.py (shared with the
+# matrix evaluation); these wrappers just load history and seed the rng.
 # ---------------------------------------------------------------------------
 
-_POOL = range(1, 91)
-
-
-def _hist_counts(hist: list[list[int]]) -> dict[int, int]:
-    counts: dict[int, int] = {}
-    for nums in hist:
-        for n in nums:
-            counts[n] = counts.get(n, 0) + 1
-    return counts
-
-
-def _hist_delay(hist: list[list[int]]) -> dict[int, int]:
-    last_seen: dict[int, int] = {}
-    for idx, nums in enumerate(hist):
-        for n in nums:
-            last_seen[n] = idx
-    n = len(hist)
-    return {x: (n - 1 - last_seen[x]) if x in last_seen else n for x in _POOL}
-
-
-def _hist_gap_mean(hist: list[list[int]]) -> dict[int, float | None]:
-    gaps: dict[int, list[int]] = {}
-    prev: dict[int, int] = {}
-    for idx, nums in enumerate(hist):
-        for n in nums:
-            if n in prev:
-                gaps.setdefault(n, []).append(idx - prev[n])
-            prev[n] = idx
-    return {x: (sum(gaps[x]) / len(gaps[x])) if gaps.get(x) else None for x in _POOL}
-
-
-def _weighted_draw(rng: random.Random, weights: Mapping[int, float], k: int) -> list[int]:
-    """k numbers without replacement, weighted (urn model)."""
-    pool = list(_POOL)
-    total = sum(weights[x] for x in pool)
-    picked: list[int] = []
-    for _ in range(min(k, len(pool))):
-        r = rng.random() * total
-        acc = 0.0
-        for x in pool:
-            acc += weights[x]
-            if acc >= r:
-                picked.append(x)
-                pool.remove(x)
-                total -= weights[x]
-                break
-    return picked
+from lottery_intelligence_platform import lab_models
 
 
 def _rng(seed: int | None, code: str, draw_type_id: UUID, target: date) -> random.Random:
     return random.Random(_stable_seed(seed or code, str(draw_type_id), target))
 
 
-def pick_hot_frequency_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """Top-frequency pool (20), prefer numbers 'due' (delay > mean gap)."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    freq = _hist_counts(hist)
-    pool = sorted(_POOL, key=lambda x: (-freq.get(x, 0), x))[:20]
-    delay = _hist_delay(hist)
-    gm = _hist_gap_mean(hist)
-    due = [
-        (x, delay[x] - gm[x], freq.get(x, 0))
-        for x in pool if gm[x] and delay[x] > gm[x]
-    ]
-    due.sort(key=lambda t: (-t[1], -t[2]))
-    if len(due) >= k:
-        return sorted(x for x, _, _ in due[:k])
-    return sorted(pool[:k])
+def _lab_picker(
+    code: str, *,
+    stochastic: bool,
+) -> Callable[[Any, UUID, date, Mapping[str, Any], int | None], list[int]]:
+    """Adapt a lab_models hist-function to the cohort picker signature."""
+    fn = lab_models.HIST_MODELS[code]
+
+    def pick(
+        connection: Any, draw_type_id: UUID, target: date,
+        params: Mapping[str, Any], seed: int | None,
+    ) -> list[int]:
+        k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
+        hist = _history(connection, draw_type_id, target)
+        rng = _rng(seed, code, draw_type_id, target) if stochastic else random.Random(0)
+        return fn(hist, rng, k)
+
+    return pick
 
 
-def pick_cold_delay_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """The k most overdue numbers (largest delay, freq tie-break)."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    freq = _hist_counts(hist)
-    delay = _hist_delay(hist)
-    ranked = sorted(_POOL, key=lambda x: (-delay[x], -freq.get(x, 0), x))
-    return sorted(ranked[:k])
+pick_hot_frequency_v1 = _lab_picker("hot_frequency_v1", stochastic=False)
+pick_cold_delay_v1 = _lab_picker("cold_delay_v1", stochastic=False)
+pick_frequency_delay_v1 = _lab_picker("frequency_delay_v1", stochastic=False)
+pick_pair_frequency_v1 = _lab_picker("pair_frequency_v1", stochastic=False)
+pick_balanced_v1 = _lab_picker("balanced_v1", stochastic=False)
+pick_bayesian_v1 = _lab_picker("bayesian_v1", stochastic=True)
+pick_monte_carlo_v1 = _lab_picker("monte_carlo_v1", stochastic=True)
+pick_ensemble_v1 = _lab_picker("ensemble_v1", stochastic=False)
 
-
-def pick_frequency_delay_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """Composite score: z-score(frequency) + z-score(delay)."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    freq = _hist_counts(hist)
-    delay = _hist_delay(hist)
-    f_vals = [freq.get(x, 0) for x in _POOL]
-    d_vals = [delay[x] for x in _POOL]
-    mf, md = sum(f_vals) / 90, sum(d_vals) / 90
-    sf = math.sqrt(sum((v - mf) ** 2 for v in f_vals) / 90) or 1
-    sd = math.sqrt(sum((v - md) ** 2 for v in d_vals) / 90) or 1
-    score = {x: (freq.get(x, 0) - mf) / sf + (delay[x] - md) / sd for x in _POOL}
-    return sorted(sorted(_POOL, key=lambda x: (-score[x], x))[:k])
-
-
-def pick_pair_frequency_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """Recency-decayed co-occurrence credit over the last 30 draws."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    freq = _hist_counts(hist)
-    score: dict[int, float] = {}
-    for offset, nums in enumerate(reversed(hist[-30:])):
-        w = 1.0 / (1 + offset)
-        for i in range(len(nums)):
-            for j in range(i + 1, len(nums)):
-                score[nums[i]] = score.get(nums[i], 0.0) + w
-                score[nums[j]] = score.get(nums[j], 0.0) + w
-    ranked = sorted(_POOL, key=lambda x: (-score.get(x, 0), -freq.get(x, 0), x))
-    return sorted(ranked[:k])
-
-
-def pick_balanced_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """~60% hottest numbers + remaining filled by most overdue."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    n_hot = max(1, round(k * 3 / 5)) if k >= 2 else k
-    hist = _history(connection, draw_type_id, target)
-    freq = _hist_counts(hist)
-    delay = _hist_delay(hist)
-    hot = sorted(_POOL, key=lambda x: (-freq.get(x, 0), x))
-    cold = sorted(_POOL, key=lambda x: (-delay[x], x))
-    picks = hot[:n_hot]
-    for x in cold:
-        if len(picks) >= k:
-            break
-        if x not in picks:
-            picks.append(x)
-    return sorted(picks)
-
-
-def pick_bayesian_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """Laplace-smoothed posterior then seeded weighted draw."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    n = len(hist)
-    freq = _hist_counts(hist)
-    per_draw = len(hist[0]) if hist else 5
-    weights = {x: (freq.get(x, 0) + 1) / (per_draw * n + 90) for x in _POOL}
-    return sorted(_weighted_draw(_rng(seed, "bayesian_v1", draw_type_id, target),
-                                 weights, k))
-
-
-def pick_monte_carlo_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """100 seeded simulations on recency-weighted frequency; keep the k
-    most-often-simulated numbers."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    hist = _history(connection, draw_type_id, target)
-    rng = _rng(seed, "monte_carlo_v1", draw_type_id, target)
-    score: dict[int, float] = {}
-    for offset, nums in enumerate(reversed(hist[-40:])):
-        w = 1.0 / (1 + offset)
-        for n in nums:
-            score[n] = score.get(n, 0.0) + w
-    weights = {x: score.get(x, 0.0) + 1 for x in _POOL}
-    sim_counts: dict[int, int] = {}
-    for _ in range(100):
-        for x in _weighted_draw(rng, weights, min(5, len(hist[0]) if hist else 5)):
-            sim_counts[x] = sim_counts.get(x, 0) + 1
-    ranked = sorted(_POOL, key=lambda x: (-sim_counts.get(x, 0), x))
-    return sorted(ranked[:k])
-
-
-_ENSEMBLE_PICKERS: tuple[str, ...] = (
-    "hot_frequency_v1", "cold_delay_v1", "frequency_delay_v1",
-    "pair_frequency_v1", "balanced_v1",
-)
-
-
-def pick_ensemble_v1(
-    connection: Any, draw_type_id: UUID, target: date,
-    params: Mapping[str, Any], seed: int | None,
-) -> list[int]:
-    """Borda vote over the deterministic lab pickers."""
-    k = int(params.get("pick_count", DEFAULT_PICK_COUNT))
-    borda: dict[int, int] = {}
-    for code in _ENSEMBLE_PICKERS:
-        for rank, x in enumerate(
-            PICKERS[code](connection, draw_type_id, target, params, seed)
-        ):
-            borda[x] = borda.get(x, 0) + (k * 2 - rank)
-    ranked = sorted(_POOL, key=lambda x: (-borda.get(x, 0), x))
-    return sorted(ranked[:k])
 
 
 PICKERS: dict[str, Callable[[Any, UUID, date, Mapping[str, Any], int | None], list[int]]] = {
