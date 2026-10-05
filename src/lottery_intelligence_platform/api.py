@@ -26,7 +26,8 @@ import psycopg
 
 from lottery_intelligence_platform import lab_matrix, structure_analysis
 from lottery_intelligence_platform.dependence import pair_dependence_tests
-from lottery_intelligence_platform.lab_coverage import coverage_portfolio
+from lottery_intelligence_platform.lab_coverage import (
+    CoverageRuleError, coverage_laboratory, resolve_payout_rule)
 from lottery_intelligence_platform.lab_matrix import fdr_bh
 from lottery_intelligence_platform.lab_simulation import simulate_bankroll
 from lottery_intelligence_platform.prediction_generation import PICKERS
@@ -636,16 +637,29 @@ class ApiHandler(BaseHTTPRequestHandler):
             return {"error": str(exc)}
 
     def _lab_coverage(self, qs: dict[str, list[str]]) -> dict[str, Any]:
-        """M10 — coverage-optimized ticket portfolio vs random baseline."""
+        """M10 — Coverage Laboratory: optimized vs random portfolios, exact/MC
+        P(at least one win), economics from catalog.payout_rule_versions."""
         try:
-            tickets = min(int((qs.get("tickets") or ["20"])[0]), 500)
+            budget = float(qs["budget"][0]) if qs.get("budget") else None
+            tickets_raw = qs.get("tickets")
+            tickets = min(int(tickets_raw[0]), 500) if tickets_raw else None
+            stake = float((qs.get("stake") or ["100"])[0])
             pick_size = int((qs.get("pick_size") or ["2"])[0])
+            seed = int((qs.get("seed") or ["0"])[0])
+            baselines = min(int((qs.get("baselines") or ["100"])[0]), 300)
+            mc_sims = min(int((qs.get("mc_sims") or ["20000"])[0]), 100_000)
         except ValueError:
-            return {"error": "tickets and pick_size must be integers"}
+            return {"error": "numeric parameters expected"}
+        variant = (qs.get("variant") or ["turbo_2"])[0]
+        rule_version = (qs.get("rule_version") or [None])[0]
         try:
-            return coverage_portfolio(
-                tickets=tickets, pick_size=pick_size, baselines=100)
-        except ValueError as exc:
+            with psycopg.connect(self.dsn, autocommit=True) as conn:
+                rule = resolve_payout_rule(conn, rule_version)
+            return coverage_laboratory(
+                rule=rule, budget_fcfa=budget, tickets=tickets, stake=stake,
+                pick_size=pick_size, variant=variant, seed=seed,
+                baselines=baselines, mc_sims=mc_sims)
+        except (CoverageRuleError, ValueError) as exc:
             return {"error": str(exc)}
 
     _matrix_cache: dict[str, dict[str, Any]] = {}

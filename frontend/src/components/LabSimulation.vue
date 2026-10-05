@@ -43,32 +43,56 @@
     </div>
 
     <div class="panel">
-      <h3>🎯 Optimiseur de couverture (M10)</h3>
+      <h3>🎯 Coverage Laboratory (M10)</h3>
       <div class="sub" style="margin-bottom:10px">
-        Portefeuille de grilles maximisant la couverture (numéros distincts
-        répartis uniformément + paires distinctes), comparé à des portefeuilles
-        aléatoires. La couverture répartit le risque — elle n'augmente pas la
-        probabilité de gain.
+        Portefeuille optimisé (tickets mutuellement disjoints d'abord, puis
+        recyclage à overlap minimal) comparé à des portefeuilles aléatoires
+        équivalents. Règle de payout lue depuis le catalogue versionné
+        (<code>{{ cov?.payout_rule?.code || 'turbo_fixed_odds' }}</code>).
       </div>
       <div class="filters">
-        <label>Tickets <input type="number" v-model.number="tickets" min="1" max="500" /></label>
-        <label>Taille grille
-          <select v-model.number="pickSize"><option :value="2">2 numéros</option><option :value="5">5 numéros</option></select></label>
+        <label>Budget FCFA <input type="number" v-model.number="budget" min="100" step="100" /></label>
+        <label>Mise <input type="number" v-model.number="covStake" min="25" step="25" /></label>
+        <label>Pick size
+          <select v-model.number="pickSize"><option :value="1">1</option><option :value="2">2</option><option :value="5">5</option></select></label>
+        <label>Variante
+          <select v-model="variant">
+            <option value="turbo_2">Turbo 2</option><option value="turbo_3">Turbo 3</option>
+            <option value="turbo_4">Turbo 4</option><option value="turbo_5">Turbo 5</option>
+          </select></label>
+        <label>Seed <input type="number" v-model.number="covSeed" min="0" /></label>
         <button class="tab" @click="loadCov">Optimiser</button>
       </div>
       <div v-if="covError" class="badge-err">{{ covError }}</div>
       <template v-else-if="cov">
-        <table class="data mb0" style="max-width:640px">
-          <tr><th></th><th>Portefeuille optimisé</th><th>Aléatoire (moy./max)</th></tr>
-          <tr><td>Numéros distincts</td><td>{{ cov.metrics.distinct_numbers }}/90</td><td>—</td></tr>
-          <tr><td>Paires distinctes</td><td>{{ cov.metrics.distinct_pairs }}</td>
-              <td>{{ cov.random_baseline.distinct_pairs_mean.toFixed(1) }} / {{ cov.random_baseline.distinct_pairs_max }}</td></tr>
-          <tr><td>Écart-type apparitions</td><td>{{ cov.metrics.appearances_stdev.toFixed(3) }}</td>
+        <div class="sub" style="margin-bottom:8px">
+          Règle : <b>{{ cov.payout_rule.version }}</b>
+          ({{ cov.payout_rule.verification_status }}) · ×{{ cov.payout_rule.payout_multiplier }} ·
+          {{ cov.tickets }} tickets × {{ cov.stake_unit }} FCFA = {{ cov.stake_total }} FCFA
+          <template v-if="cov.remainder_fcfa">· reste {{ cov.remainder_fcfa }} FCFA non alloué</template>
+        </div>
+        <table class="data mb0" style="max-width:720px">
+          <tr><th></th><th>OPTIMISÉ</th><th>RANDOM (moyenne)</th></tr>
+          <tr><td>Numéros couverts</td><td>{{ cov.optimized.metrics.distinct_numbers }}/90</td>
+              <td>{{ cov.random_baseline.distinct_numbers_mean.toFixed(1) }}</td></tr>
+          <tr><td>Paires couvertes</td><td>{{ cov.optimized.metrics.distinct_pairs }}</td>
+              <td>{{ cov.random_baseline.distinct_pairs_mean.toFixed(1) }} (max {{ cov.random_baseline.distinct_pairs_max }})</td></tr>
+          <tr><td>Overlap paires / ticket</td><td>{{ cov.optimized.metrics.pair_overlap_mean.toFixed(3) }}</td>
+              <td>{{ cov.random_baseline.pair_overlap_mean.toFixed(3) }}</td></tr>
+          <tr><td>Écart-type apparitions</td><td>{{ cov.optimized.metrics.appearances_stdev.toFixed(3) }}</td>
               <td>{{ cov.random_baseline.appearances_stdev_mean.toFixed(3) }}</td></tr>
-          <tr><td>Apparitions min–max</td><td>{{ cov.metrics.appearances_min }}–{{ cov.metrics.appearances_max }}</td><td>—</td></tr>
+          <tr><td>P(≥1 gain)</td>
+              <td>{{ (cov.optimized.probability_at_least_one_win.value * 100).toFixed(2) }} %
+                  <span class="sub">{{ probMethod(cov.optimized.probability_at_least_one_win) }}</span></td>
+              <td>{{ (cov.random_baseline.p_at_least_one_mean * 100).toFixed(2) }} % (max {{ (cov.random_baseline.p_at_least_one_max * 100).toFixed(2) }} %)</td></tr>
+          <tr><td>EV portefeuille</td><td class="err">{{ fmt(cov.optimized.economics.ev_portfolio) }} FCFA</td>
+              <td>identique (EV = n × EV ticket)</td></tr>
+          <tr><td>RTP</td><td>{{ (cov.optimized.economics.rtp * 100).toFixed(1) }} %</td><td>identique</td></tr>
+          <tr><td>Perte attendue</td><td class="err">{{ fmt(cov.optimized.economics.expected_loss) }} FCFA</td><td>identique</td></tr>
         </table>
+        <div class="sub" style="margin-top:8px; max-width:720px">{{ cov.disclaimer }}</div>
         <div class="balls" style="margin-top:10px">
-          <span v-for="(t, i) in cov.portfolio" :key="i" class="ticket">
+          <span v-for="(t, i) in cov.optimized.portfolio" :key="i" class="ticket">
             <b v-for="n in t" :key="n" class="ball">{{ n }}</b>
           </span>
         </div>
@@ -84,10 +108,17 @@ import api from '../api'
 const variant = ref(2); const draws = ref(200); const bankroll = ref(10000)
 const stake = ref(100); const lift = ref(1.0)
 const sim = ref<any>(null); const loading = ref(false); const error = ref('')
-const tickets = ref(20); const pickSize = ref(2)
+const budget = ref(2000); const covStake = ref(100); const pickSize = ref(2)
+const covSeed = ref(0)
 const cov = ref<any>(null); const covError = ref('')
 
 function fmt(x?: number) { return x == null ? '—' : Math.round(x).toLocaleString() }
+function probMethod(p: any) {
+  if (!p) return ''
+  return p.method === 'EXACT' ? 'EXACT'
+    : `MONTE_CARLO — ${p.mc_sims} sims — seed ${p.mc_seed}` +
+      (p.ci95_wilson ? ` · IC95 [${(p.ci95_wilson[0]*100).toFixed(2)}–${(p.ci95_wilson[1]*100).toFixed(2)} %]` : '')
+}
 
 async function load() {
   loading.value = true; error.value = ''; sim.value = null
@@ -104,7 +135,9 @@ async function load() {
 async function loadCov() {
   covError.value = ''; cov.value = null
   try {
-    const res = await api.get('/api/lab/coverage', { params: { tickets: tickets.value, pick_size: pickSize.value } })
+    const res = await api.get('/api/lab/coverage', { params: {
+      budget: budget.value, stake: covStake.value, pick_size: pickSize.value,
+      variant: variant.value, seed: covSeed.value } })
     if (res.data.error) covError.value = res.data.error
     else cov.value = res.data
   } catch (e: any) { covError.value = e.response?.data?.error || e.message }
