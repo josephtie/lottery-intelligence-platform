@@ -12,7 +12,9 @@
           {{ t.display_name }} ({{ t.settled_draws }})</option>
       </select>
       <select v-model="days" @change="load">
+        <option :value="10">10 derniers jours</option>
         <option :value="30">30 derniers jours</option>
+        <option :value="50">50 derniers jours</option>
         <option :value="90">90 derniers jours</option>
         <option :value="365">1 an</option>
         <option :value="0">Tout l'historique</option>
@@ -55,6 +57,34 @@
         </div>
       </div>
 
+      <div class="stat-grid" style="margin-top:14px">
+        <div>
+          <h3 class="sh">🎯 Deux premiers numéros (positions 1–2)</h3>
+          <div class="sub" style="margin-bottom:8px">
+            Fréquence de sortie en 1re ou 2e position · attendu ≈
+            {{ stats.first_two_expected?.toFixed(1) }} sorties sur {{ stats.draw_count }} tirages
+          </div>
+          <div v-for="x in stats.first_two" :key="'f'+x.number" class="stat-hbar">
+            <span class="num-ball pos-ball">{{ x.number }}</span>
+            <div class="bar"><div class="fill pos-fill"
+                 :style="{width: barw2(x.count, stats.first_two[0]?.count)}"></div></div>
+            <span class="num">{{ x.count }}</span>
+          </div>
+        </div>
+        <div>
+          <h3 class="sh">👯 Paires les plus fréquentes</h3>
+          <table class="data mb0" v-if="stats.top_pairs?.length">
+            <tr><th>Paire</th><th>Sorties</th><th>Dernière</th></tr>
+            <tr v-for="p in stats.top_pairs.slice(0, 12)" :key="p.pair.join('-')">
+              <td><span v-for="n in p.pair" :key="n" class="num-ball pair-ball">{{ n }}</span></td>
+              <td class="mono">{{ p.count }}</td>
+              <td class="mono sub">{{ p.last_date }}</td>
+            </tr>
+          </table>
+          <div v-else class="sub">Pas assez de tirages.</div>
+        </div>
+      </div>
+
       <h3 class="sh" style="margin-top:16px">Grille 1–90 (fréquence · retard en titre)</h3>
       <div class="grid90">
         <div v-for="x in stats.numbers" :key="x.number" class="cell"
@@ -83,6 +113,9 @@ const maxCount = computed(() =>
   Math.max(1, ...(stats.value?.numbers ?? []).map((x: any) => x.count)))
 
 function barw(c: number) { return (c / maxCount.value * 100).toFixed(1) + '%' }
+function barw2(c: number, max: number) {
+  return (c / Math.max(1, max ?? 1) * 100).toFixed(1) + '%'
+}
 
 function cellClass(x: any) {
   const r = maxCount.value ? x.count / maxCount.value : 0
@@ -122,6 +155,9 @@ onMounted(async () => {
 @media (max-width: 700px) { .stat-grid { grid-template-columns: 1fr; } }
 .cold-ball { background: #4a6a8a; color: #fff; }
 .cold-fill { background: #4a6a8a; }
+.pos-ball { background: var(--green); color: #fff; }
+.pos-fill { background: var(--green); }
+.pair-ball { background: var(--panel); color: var(--gold-soft); border: 1px solid var(--gold); }
 .grid90 {
   display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px;
 }

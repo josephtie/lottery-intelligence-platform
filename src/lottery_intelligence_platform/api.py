@@ -419,7 +419,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             clause = "AND d.scheduled_date >= CURRENT_DATE - %s" if days > 0 else ""
             params: tuple[Any, ...] = (draw_type_id, days) if days > 0 else (draw_type_id,)
             rows = conn.execute(
-                f"""SELECT d.scheduled_date, n.number
+                f"""SELECT d.scheduled_date, n.number, n.position
                     FROM core.draws d
                     JOIN core.draw_versions v
                       ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
@@ -427,21 +427,46 @@ class ApiHandler(BaseHTTPRequestHandler):
                       ON n.draw_version_id = v.draw_version_id
                      AND n.number_role = 'WINNING'
                     WHERE d.draw_type_id = %s {clause}
-                    ORDER BY d.scheduled_date DESC""",
+                    ORDER BY d.scheduled_date DESC, n.position""",
                 params,
             ).fetchall()
         draw_dates = sorted({r[0] for r in rows}, reverse=True)
         draw_count = len(draw_dates)
         date_rank = {d: i for i, d in enumerate(draw_dates)}
         counts = {n: 0 for n in range(1, 91)}
+        first_two = {n: 0 for n in range(1, 91)}
         last_rank = {n: None for n in range(1, 91)}
         last_date: dict[int, date | None] = {n: None for n in range(1, 91)}
-        for draw_date, number in rows:
+        by_draw: dict[date, list[int]] = {}
+        for draw_date, number, position in rows:
             counts[number] += 1
+            if position is not None and position <= 2:
+                first_two[number] += 1
+            by_draw.setdefault(draw_date, []).append(number)
             rank = date_rank[draw_date]
             if last_rank[number] is None or rank < last_rank[number]:
                 last_rank[number] = rank
                 last_date[number] = draw_date
+        # Most frequent unordered winning pairs within a draw
+        pair_counts: dict[tuple[int, int], int] = {}
+        pair_last: dict[tuple[int, int], date] = {}
+        for draw_date, nums in by_draw.items():
+            nums = sorted(set(nums))
+            for i in range(len(nums)):
+                for j in range(i + 1, len(nums)):
+                    pair = (nums[i], nums[j])
+                    pair_counts[pair] = pair_counts.get(pair, 0) + 1
+                    pair_last.setdefault(pair, draw_date)
+        pairs = [
+            {"pair": [a, b], "count": c, "last_date": pair_last[(a, b)].isoformat()}
+            for (a, b), c in sorted(
+                pair_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+        ]
+        first_two_ranked = [
+            {"number": n, "count": c}
+            for n, c in sorted(first_two.items(), key=lambda kv: (-kv[1], kv[0]))
+            if c > 0
+        ][:20]
         observed = [counts[n] for n in range(1, 91)]
         total = sum(observed)
         expected = total / 90 if total else 0.0
@@ -469,6 +494,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             "hot": by_count[:10],
             "cold": by_count[-10:],
             "max_delay": max(numbers, key=lambda x: x["delay"]),
+            "first_two": first_two_ranked,
+            "first_two_expected": draw_count * 2 / 90 if draw_count else 0.0,
+            "top_pairs": pairs,
         }
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
