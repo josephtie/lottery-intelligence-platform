@@ -45,11 +45,18 @@
     <template v-else>
       <!-- Sélecteur de jeu -->
       <div class="gamenav">
-        <button class="gn-back" @click="game = ''">◂ Tous les jeux</button>
+        <button class="gn-back" @click="back()">◂ Tous les jeux</button>
         <button v-for="c in cards?.cards ?? []" :key="c.game"
                 class="gn-chip" :class="{ on: c.game === game }"
                 @click="open(c.game)">{{ c.game.toUpperCase() }}</button>
+        <button class="gn-chip t2" :class="{ on: mode === 'turbo2' }"
+                @click="mode = mode === 'turbo2' ? 'profile' : 'turbo2'">
+          🎯 Turbo 2</button>
       </div>
+
+      <Turbo2History v-if="mode === 'turbo2'" :game="game" />
+
+      <template v-else>
 
       <div v-if="loading" class="sub" style="margin:14px 0">
         Replay walk-forward de {{ game }} en cours (~10-25 s)…
@@ -197,6 +204,7 @@
           échantillons suffisants.</div>
       </template>
       <div v-else-if="data?.error" class="badge-warn">{{ data.error }}</div>
+      </template>
     </template>
   </div>
 </template>
@@ -204,6 +212,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import api from '../api'
+import Turbo2History from './Turbo2History.vue'
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 const weekdayName = (w: number) => DAYS[w] ?? w
@@ -216,6 +225,7 @@ const loading = ref(false)
 const err = ref('')
 const focusModel = ref('')
 const wd = ref(0) // Monday
+const mode = ref<'profile' | 'turbo2'>('profile')
 
 const pct = (x?: number) => x == null ? '—' : x + ' %'
 const barWidth = (m?: number) => `${Math.min(120, (m ?? 0) * 200)}px`
@@ -307,8 +317,14 @@ const alerts = computed(() => {
   return out
 })
 
+function back() {
+  game.value = ''
+  mode.value = 'profile'
+}
+
 async function open(g: string) {
   game.value = g
+  mode.value = 'profile'
   loading.value = true; err.value = ''; data.value = null
   try {
     const res = await api.get('/api/lab/game-profiles', { params: { draw_type: g } })
@@ -359,6 +375,8 @@ onMounted(async () => {
   border-radius: 12px; padding: 4px 12px; cursor: pointer; font-size: 11.5px;
   font-weight: 700; letter-spacing: 0.5px; }
 .gn-chip.on { background: var(--gold); color: #111; border-color: var(--gold); }
+.gn-chip.t2 { border-color: var(--gold); color: var(--gold); }
+.gn-chip.t2.on { background: var(--gold); color: #111; }
 
 .syngrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px; margin-bottom: 4px; }

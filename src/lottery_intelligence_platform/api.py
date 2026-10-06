@@ -28,6 +28,7 @@ from lottery_intelligence_platform import (
     game_temporal,
     lab_matrix,
     structure_analysis,
+    turbo2_view,
 )
 from lottery_intelligence_platform.dependence import pair_dependence_tests
 from lottery_intelligence_platform.lab_coverage import (
@@ -754,6 +755,22 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._game_cards_cache[key] = result
         return result
 
+    def _lab_turbo2_history(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Turbo 2 sealed history for ONE game — reads metrics already
+        computed by the settlement engine; never recomputes."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            return turbo2_view.turbo2_history(conn, dt_row[0])
+
     def _lab_candidates(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         top = min(int((qs.get("top") or ["8"])[0]), 30)
         with psycopg.connect(self.dsn, autocommit=True) as conn:
@@ -880,6 +897,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/game-cards":
                 self._send(self._lab_game_cards(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/turbo2-history":
+                self._send(self._lab_turbo2_history(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:
