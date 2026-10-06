@@ -24,7 +24,11 @@ from uuid import UUID
 
 import psycopg
 
-from lottery_intelligence_platform import lab_matrix, structure_analysis
+from lottery_intelligence_platform import (
+    game_temporal,
+    lab_matrix,
+    structure_analysis,
+)
 from lottery_intelligence_platform.dependence import pair_dependence_tests
 from lottery_intelligence_platform.lab_coverage import (
     CoverageRuleError, coverage_laboratory, resolve_payout_rule)
@@ -690,6 +694,46 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._matrix_cache[cache_key] = result
         return result
 
+    _game_profiles_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_game_profiles(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Temporal Intelligence layer — JEU × MODÈLE walk-forward profiles.
+        Read-only observation; never touches predictions or settlement."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        as_of_raw = (qs.get("as_of") or [None])[0]
+        try:
+            as_of = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
+        except ValueError:
+            return {"error": "as_of must be YYYY-MM-DD"}
+        cache_key = f"{draw_type}:{as_of.isoformat()}"
+        if cache_key in self._game_profiles_cache:
+            return self._game_profiles_cache[cache_key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            result = game_temporal.game_profile(
+                conn, dt_row[0], dt_row[1], as_of=as_of)
+        self._game_profiles_cache[cache_key] = result
+        return result
+
+    def _lab_game_matrix(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Cross-game matrix from sealed prospective outcomes — real stats,
+        sparse cells labelled, never invented."""
+        as_of_raw = (qs.get("as_of") or [None])[0]
+        try:
+            as_of = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
+        except ValueError:
+            return {"error": "as_of must be YYYY-MM-DD"}
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            return game_temporal.prospective_matrix(conn, as_of)
+
     def _lab_candidates(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         top = min(int((qs.get("top") or ["8"])[0]), 30)
         with psycopg.connect(self.dsn, autocommit=True) as conn:
@@ -807,6 +851,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/coverage":
                 self._send(self._lab_coverage(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/game-profiles":
+                self._send(self._lab_game_profiles(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/game-matrix":
+                self._send(self._lab_game_matrix(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

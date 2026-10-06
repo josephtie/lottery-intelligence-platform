@@ -13,6 +13,7 @@
   <ProspectiveH008 v-else-if="tab === 'prospective'" />
   <LabStructure v-else-if="tab === 'structure'" />
   <LabSimulation v-else-if="tab === 'simulation'" />
+  <GameProfiles v-else-if="tab === 'profiles'" />
   <Journal v-else-if="tab === 'journal'" />
 
   <template v-else>
@@ -68,6 +69,7 @@ import LabCandidates from '../components/LabCandidates.vue'
 import ProspectiveH008 from '../components/ProspectiveH008.vue'
 import LabStructure from '../components/LabStructure.vue'
 import LabSimulation from '../components/LabSimulation.vue'
+import GameProfiles from '../components/GameProfiles.vue'
 import Journal from '../components/Journal.vue'
 
 const tabs = [
@@ -77,6 +79,7 @@ const tabs = [
   { id: 'prospective', label: '🔮 Prospectif multi-modèles (H008)' },
   { id: 'structure', label: '🧬 Structure des tirages' },
   { id: 'simulation', label: '💰 Simulation & Couverture' },
+  { id: 'profiles', label: '🧠 Profils des jeux' },
   { id: 'journal', label: '📚 Journal' },
   { id: 'catalog', label: '� Catalogue' },
 ]
