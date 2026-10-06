@@ -1,11 +1,12 @@
 <template>
-  <h2 class="page-title">🧪 Laboratoire de recherche</h2>
+  <h2 class="page-title">🔬 Recherche</h2>
 
   <div class="tabbar">
     <button v-for="t in tabs" :key="t.id" class="tab"
             :class="{ active: tab === t.id }" @click="tab = t.id">
       {{ t.label }}</button>
   </div>
+  <div class="tab-desc">{{ activeTab?.desc }}</div>
 
   <ReplayLab v-if="tab === 'replay'" :show5="true" />
   <LabMatrix v-else-if="tab === 'matrix'" />
@@ -61,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useFetch } from '../useFetch'
 import ReplayLab from '../components/ReplayLab.vue'
 import LabMatrix from '../components/LabMatrix.vue'
@@ -73,17 +74,27 @@ import GameProfiles from '../components/GameProfiles.vue'
 import Journal from '../components/Journal.vue'
 
 const tabs = [
-  { id: 'replay', label: '🔁 Prédictions par modèle' },
-  { id: 'matrix', label: '📐 Matrice de performance' },
-  { id: 'candidates', label: '🏆 Candidats par jeu' },
-  { id: 'prospective', label: '🔮 Prospectif multi-modèles (H008)' },
-  { id: 'structure', label: '🧬 Structure des tirages' },
-  { id: 'simulation', label: '💰 Simulation & Couverture' },
-  { id: 'profiles', label: '🧠 Profils des jeux' },
-  { id: 'journal', label: '📚 Journal' },
-  { id: 'catalog', label: '� Catalogue' },
+  { id: 'candidates', label: '🏆 Y a-t-il un gagnant ?',
+    desc: 'Le meilleur modèle de chaque jeu — ou le verdict honnête « aucun modèle démontré », qui est un résultat valable.' },
+  { id: 'matrix', label: '📐 Qui tient ses promesses ?',
+    desc: 'Tous les modèles rejouent les mêmes tirages et sont comparés au hasard. Un modèle n\'est « candidat » que s\'il fait mieux que le hasard de façon stable — pas sur un coup de chance.' },
+  { id: 'prospective', label: '🔮 Prédictions en conditions réelles',
+    desc: 'Des prédictions sont scellées AVANT le tirage et mesurées APRÈS. C\'est la seule preuve qui compte — impossible de tricher sur le futur.' },
+  { id: 'profiles', label: '🧠 Historique par jeu',
+    desc: 'Chaque jeu a son profil : semaine par semaine, jour par jour, quel modèle a été régulier — et lequel a juste eu de la chance.' },
+  { id: 'replay', label: '🔁 Rejouer le passé',
+    desc: 'Que prédisait chaque modèle pour un tirage déjà connu ? On rejoue la scène sans tricher : le modèle ne voit que les tirages d\'avant. Rien n\'est modifié.' },
+  { id: 'simulation', label: '💰 Argent & portefeuilles',
+    desc: 'Si on jouait vraiment : combien on miserait, ce qu\'on récupérerait, le risque de tout perdre. Et comment répartir les numéros entre grilles.' },
+  { id: 'structure', label: '🧬 Le tirage est-il normal ?',
+    desc: 'Tests statistiques sur l\'historique : fréquences équilibrées ? mémoire entre tirages ? rupture ? Réponse honnête attendue : « compatible avec le hasard ».' },
+  { id: 'journal', label: '📚 Carnet de recherche',
+    desc: 'Toutes les hypothèses testées et leur verdict : confirmée, rejetée, ou pas encore tranchée. On ne répète pas deux fois la même erreur.' },
+  { id: 'catalog', label: '📋 Catalogue',
+    desc: 'L\'inventaire technique : modèles enregistrés, cohortes prospectives, datasets versionnés.' },
 ]
-const tab = ref('replay')
+const tab = ref('candidates')
+const activeTab = computed(() => tabs.find(t => t.id === tab.value))
 
 const { data: models } = useFetch<any[]>('/api/models')
 const { data: datasets } = useFetch<any[]>('/api/datasets')
@@ -98,5 +109,9 @@ const { data: cohorts } = useFetch<any[]>('/api/cohorts')
 }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--gold); color: #111; font-weight: 700; border-color: var(--gold); }
+.tab-desc {
+  color: var(--muted); font-size: 12.5px; line-height: 1.45;
+  padding: 8px 4px 14px; max-width: 900px;
+}
 .null-row td { opacity: 0.75; }
 </style>

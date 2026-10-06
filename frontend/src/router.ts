@@ -20,7 +20,7 @@ const router = createRouter({
     { path: '/statistics', name: 'Statistics', component: Statistics, meta: { title: 'Statistiques' } },
     { path: '/predictions', name: 'Predictions', component: Predictions, meta: { title: 'Prédictions' } },
     { path: '/prospective', name: 'Prospective', component: Prospective, meta: { title: 'Prospective' } },
-    { path: '/research', name: 'Research', component: Research, meta: { title: 'Laboratoire' } },
+    { path: '/research', name: 'Research', component: Research, meta: { title: 'Recherche' } },
     { path: '/findings', name: 'Findings', component: Findings, meta: { title: 'Findings' } },
     { path: '/quality', name: 'Quality', component: Quality, meta: { title: 'Qualité' } },
     { path: '/ops', name: 'Ops', component: Ops, meta: { title: 'Opérations' } },

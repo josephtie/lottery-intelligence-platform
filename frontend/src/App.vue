@@ -75,12 +75,12 @@ const groups: Group[] = [
     { to: '/quality', label: 'Qualité données', emoji: '⚠️' },
   ]},
   { id: 'preuves', title: 'Preuve prospective', emoji: '🔮', items: [
-    { to: '/predictions', label: 'Prédictions', emoji: '�' },
+    { to: '/predictions', label: 'Prédictions', emoji: '🔮' },
     { to: '/prospective', label: 'Performance', emoji: '📈' },
   ]},
-  { id: 'labo', title: 'Recherche', emoji: '�', items: [
-    { to: '/research', label: 'Laboratoire', emoji: '🧬' },
-    { to: '/findings', label: 'Findings', emoji: '🔬' },
+  { id: 'labo', title: 'Recherche', emoji: '🔬', items: [
+    { to: '/research', label: 'Analyses & modèles', emoji: '�' },
+    { to: '/findings', label: 'Résultats', emoji: '�' },
   ]},
   { id: 'ops', title: 'Exploitation', emoji: '⚙️', items: [
     { to: '/ops', label: 'Jobs & sources', emoji: '⚙️' },
