@@ -8,6 +8,7 @@ crash cannot break the pipeline — unfinished work is simply retried.
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -340,10 +341,25 @@ def _suspend_underperformers(
     return candidates
 
 
+def _scripts_dir() -> Path:
+    """Locate the ops shell scripts. In a source checkout they live at
+    <repo>/scripts; in the Docker image the package sits in site-packages so
+    REPO_ROOT is meaningless — the image copies them to /app/scripts.
+    LOTTERY_SCRIPTS_DIR overrides both."""
+    override = os.environ.get("LOTTERY_SCRIPTS_DIR")
+    if override:
+        return Path(override)
+    for candidate in (REPO_ROOT / "scripts", Path("/app/scripts")):
+        if candidate.is_dir():
+            return candidate
+    return REPO_ROOT / "scripts"
+
+
 def _run_script(connection: Any, run: JobRun, script: str) -> Mapping[str, Any]:
+    path = _scripts_dir() / script
     completed = subprocess.run(
-        ["bash", str(REPO_ROOT / "scripts" / script)],
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=600,
+        ["bash", str(path)],
+        cwd=path.parent, capture_output=True, text=True, timeout=600,
     )
     emit_event(
         connection,

@@ -93,6 +93,7 @@ services:
       LOTTERY_S3_ACCESS_KEY: ${LOTTERY_S3_ACCESS_KEY}
       LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY}
       LOTTERY_BACKUP_DIR: /app/backups
+      LOTTERY_SCRIPTS_DIR: /app/scripts
       LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN}
     command:
       - python
