@@ -86,6 +86,18 @@ DEFAULT_JOB_DEFS: tuple[dict[str, Any], ...] = (
         "schedule_cron": "*/15 * * * *",
         "config": {},
     },
+    {
+        "code": "check_collection_coverage",
+        "kind": "MAINTENANCE",
+        "schedule_cron": "30 5 * * *",
+        "config": {},
+    },
+    {
+        "code": "warm_game_profiles",
+        "kind": "MAINTENANCE",
+        "schedule_cron": "10 6 * * *",
+        "config": {},
+    },
 )
 
 

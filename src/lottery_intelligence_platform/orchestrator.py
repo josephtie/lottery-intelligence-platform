@@ -8,8 +8,10 @@ crash cannot break the pipeline — unfinished work is simply retried.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
+import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -524,6 +526,127 @@ def handle_verify_backups(connection: Any, run: JobRun) -> Mapping[str, Any]:
     return _run_script(connection, run, "verify_backups.sh")
 
 
+# Coverage watchdog (audit H1): with a single external source, a silent
+# format change or a missed draw is only detectable by comparing what the
+# schedule *should* have produced vs what was actually collected. The
+# catalogue stores no schedule, so expected weekdays are inferred from
+# history: a game is expected on weekday w when it produced a draw on >=3
+# of the last 8 occurrences of w. Checks "yesterday" so late-evening draws
+# have had the night to settle.
+COVERAGE_MIN_HISTORY_DRAWS = 5  # weekly games reach ~8 draws in 56 days
+COVERAGE_LOOKBACK_DAYS = 56
+COVERAGE_STALE_DAYS = 14
+
+
+def handle_check_collection_coverage(
+    connection: Any, run: JobRun
+) -> Mapping[str, Any]:
+    """Alert when a game expected yesterday produced no numbered draw.
+
+    Two failure shapes covered: a missed draw on an expected weekday
+    (COLLECTION_GAP) and a game gone silent for >14 days while its
+    historical pattern says it should still be drawing
+    (COLLECTION_STALE_GAME — the per-game signature of a source-side
+    change that the pipeline-level freshness watchdog cannot see).
+    """
+    check_date = date.fromisoformat(
+        str(run.details.get("check_date"))
+        if run.details.get("check_date")
+        else (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    )
+    iso_dow = check_date.isoweekday()
+
+    games = connection.execute(
+        """SELECT dt.draw_type_id, dt.display_name,
+                  COUNT(DISTINCT d.scheduled_date)
+                     FILTER (WHERE extract(isodow FROM d.scheduled_date) = %s)
+                     AS same_weekday_draws,
+                  COUNT(DISTINCT d.scheduled_date) AS total_draws,
+                  MAX(d.scheduled_date) AS last_draw
+           FROM catalog.draw_types dt
+           JOIN core.draws d ON d.draw_type_id = dt.draw_type_id
+             AND d.scheduled_date > %s - %s
+             AND EXISTS (SELECT 1 FROM core.draw_versions v
+                         JOIN core.draw_numbers dn
+                           ON dn.draw_version_id = v.draw_version_id
+                         WHERE v.draw_id = d.draw_id
+                           AND v.validation_status = 'VALID')
+           GROUP BY dt.draw_type_id, dt.display_name""",
+        (iso_dow, check_date, timedelta(days=COVERAGE_LOOKBACK_DAYS)),
+    ).fetchall()
+
+    gaps: list[dict[str, Any]] = []
+    stale: list[dict[str, Any]] = []
+    checked = 0
+    for tid, name, same_wd, total, last_draw in games:
+        if total < COVERAGE_MIN_HISTORY_DRAWS:
+            continue
+        checked += 1
+        expected = same_wd >= 3
+        if expected:
+            got = connection.execute(
+                """SELECT COUNT(*) FROM core.draws d
+                   WHERE d.draw_type_id = %s AND d.scheduled_date = %s
+                     AND EXISTS (SELECT 1 FROM core.draw_versions v
+                                 JOIN core.draw_numbers dn
+                                   ON dn.draw_version_id = v.draw_version_id
+                                 WHERE v.draw_id = d.draw_id
+                                   AND v.validation_status = 'VALID')""",
+                (tid, check_date),
+            ).fetchone()[0]
+            if got == 0:
+                gaps.append({"game": name, "date": str(check_date),
+                             "weekday": iso_dow})
+        silent_days = (check_date - last_draw).days
+        if silent_days > COVERAGE_STALE_DAYS:
+            stale.append({"game": name, "last_draw": str(last_draw),
+                          "silent_days": silent_days})
+
+    report = {"check_date": str(check_date), "games_checked": checked,
+              "gaps": gaps, "stale_games": stale}
+    emit_event(connection, "COLLECTION_COVERAGE_REPORT", report,
+               job_run_id=run.job_run_id)
+    if gaps:
+        _alert(connection, "COLLECTION_GAP", "CRITICAL",
+               {"check_date": str(check_date), "missing": gaps})
+    else:
+        _auto_resolve(connection, run, "COLLECTION_GAP")
+    if stale:
+        _alert(connection, "COLLECTION_STALE_GAME", "WARNING",
+               {"stale_games": stale})
+    else:
+        _auto_resolve(connection, run, "COLLECTION_STALE_GAME")
+    return report
+
+
+def handle_warm_game_profiles(
+    connection: Any, run: JobRun
+) -> Mapping[str, Any]:
+    """Warm the API's game-cards cache so the first visitor never waits.
+
+    The cards endpoint replays ~39 games walk-forward (~2 min cold); the
+    result is cached per as_of date inside the API process. This job hits
+    the endpoint once a day after the morning checks. Failure is reported
+    but does not fail the run — a cold cache is a UX issue, not an outage.
+    """
+    base = os.environ.get("LOTTERY_API_INTERNAL_URL", "http://api:8090")
+    token = os.environ.get("LOTTERY_API_TOKEN", "")
+    req = urllib.request.Request(
+        f"{base}/api/lab/game-cards",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            payload = json.loads(resp.read())
+        report = {"ok": True, "cards": len(payload.get("cards", [])),
+                  "status": resp.status}
+    except Exception as exc:  # noqa: BLE001 - warming must never crash the loop
+        report = {"ok": False, "error": str(exc)[:300]}
+    emit_event(connection, "GAME_CARDS_WARMED", report,
+               job_run_id=run.job_run_id)
+    return report
+
+
 # Critical periodic jobs and the maximum tolerated silence, in minutes.
 # collect/settle fire every 5 min; predictions twice hourly. A missed
 # window means the scheduler or the pipeline is wedged — the worst kind
@@ -607,6 +730,8 @@ HANDLERS: dict[str, Callable[[Any, JobRun], Mapping[str, Any] | None]] = {
     "backup_raw_storage": handle_backup_raw_storage,
     "verify_backups": handle_verify_backups,
     "check_job_freshness": handle_check_job_freshness,
+    "check_collection_coverage": handle_check_collection_coverage,
+    "warm_game_profiles": handle_warm_game_profiles,
 }
 
 

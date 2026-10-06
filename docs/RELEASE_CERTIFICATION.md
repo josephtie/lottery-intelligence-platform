@@ -6,13 +6,14 @@ VALIDATED and no economic edge has been demonstrated.
 
 | Field | Value |
 |---|---|
-| Date | 2026-10-04 |
-| Git commit | `cbf4a7e` (+ pending phase05–09 docs commit) |
+| Date | 2026-10-04 (production update 2026-10-06) |
+| Git commit | `93e172c` |
 | Branch | `feature/data-foundation` |
 | Schema version | `0019_data_quality` (19 migrations, checksums enforced) |
 | Dataset version | `lotobonheur_archive_v1` v1 — 15 583 members, cutoff 2026-10-04 |
 | Prospective cohort | `prospective_turbo_v1` v1, sealed 2026-10-04 |
-| Tests | 150 unit + 46 integration, all green (run 2026-10-04) |
+| Tests | 254 (unit + integration), all green (run 2026-10-06) |
+| Production | VPS `83.171.249.150` — 4/4 containers healthy |
 
 ## Criteria (phase 09 checklist)
 
@@ -51,16 +52,25 @@ VALIDATED and no economic edge has been demonstrated.
       (search/find_similar/history functions)
 - [x] research history queryable (model, strategy, failure)
 
-### PRODUCTION — partial by design
-- [x] healthchecks (`orchestrator_cli health`, `/api/health`)
-- [x] monitoring (`ops.alerts`, job events ledger, `audit_data_quality`)
-- [x] backup + restore tested
-- [~] Docker deployment: DB+MinIO containerized; API/console/workers run
-      host-side (cron). VPS compose of remaining services = future work
-- [~] security: secrets out of git, optional API Bearer token, loopback
-      default; TLS not needed on loopback, required before remote exposure
+### PRODUCTION — complete (updated 2026-10-06)
+- [x] healthchecks (`orchestrator_cli health`, `/api/health`, Docker
+      healthchecks on all 4 services incl. scheduler heartbeat)
+- [x] monitoring (`ops.alerts`, job events ledger, `audit_data_quality`,
+      `check_job_freshness` watchdog, `check_collection_coverage` per-game
+      gap detection — audit H1)
+- [x] backup + restore tested (drill re-run 2026-10-06: 15 698 draws /
+      148 075 numbers / 1 398 predictions restored, row counts match)
+- [x] Docker deployment: all 4 services (postgres, rustfs, api, scheduler)
+      containerized on VPS `83.171.249.150` via `compose.selfhosted.yaml`;
+      host-side macOS cron retired 2026-10-06 (single orchestrator on VPS)
+- [x] security: secrets out of git, Bearer auth enforced on `/api/*`,
+      postgres/S3 loopback-only, log rotation on all containers
 - [~] structured logs: job events are the structured ledger; free-text
-      script logs go to `logs/`
+      script logs rotate in containers
+- [x] evidence RPO: `export_evidence` ships sealed
+      predictions/outcomes/cohorts to content-addressed S3 **hourly** —
+      the audit H2 24 h window only applies to re-collectable draw data,
+      not to prospective evidence
 
 ## Known limitations
 
@@ -74,8 +84,9 @@ VALIDATED and no economic edge has been demonstrated.
    evidentiary claims.
 5. Digital RNG types show small non-uniformity (w≈0.12) — tracked as a
    data-integrity signal, not exploitable (~40× baseline needed).
-6. macOS cron requires Full Disk Access; VPS deployment uses launchd/
-   containers (phase07 remaining).
+6. ~~macOS cron requires Full Disk Access~~ — resolved 2026-10-06:
+   orchestration runs inside the VPS scheduler container; the Mac is a
+   dev/archive environment.
 
 ## Research validation status
 
