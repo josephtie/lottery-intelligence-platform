@@ -734,6 +734,26 @@ class ApiHandler(BaseHTTPRequestHandler):
         with psycopg.connect(self.dsn, autocommit=True) as conn:
             return game_temporal.prospective_matrix(conn, as_of)
 
+    _game_cards_cache: dict[str, Any] = {}
+
+    def _lab_game_cards(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """One card per game — windowed walk-forward summary. Cached."""
+        as_of_raw = (qs.get("as_of") or [None])[0]
+        try:
+            as_of = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
+        except ValueError:
+            return {"error": "as_of must be YYYY-MM-DD"}
+        key = as_of.isoformat()
+        if key in self._game_cards_cache:
+            return self._game_cards_cache[key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            cards = game_temporal.game_cards(conn, as_of)
+        result = {"as_of": key,
+                  "card_window": game_temporal.CARD_WINDOW,
+                  "cards": cards}
+        self._game_cards_cache[key] = result
+        return result
+
     def _lab_candidates(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         top = min(int((qs.get("top") or ["8"])[0]), 30)
         with psycopg.connect(self.dsn, autocommit=True) as conn:
@@ -857,6 +877,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/game-matrix":
                 self._send(self._lab_game_matrix(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/game-cards":
+                self._send(self._lab_game_cards(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

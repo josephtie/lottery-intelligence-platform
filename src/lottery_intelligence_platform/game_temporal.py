@@ -98,12 +98,16 @@ def wf_series(
     pick_count: int,
     seed: int,
     warmup: int = WARMUP,
+    start: int | None = None,
 ) -> list[dict[str, Any]]:
     """Walk-forward hit series: model i only ever sees hist[:i].
-    Same construction as lab_matrix.evaluate_game's walk_forward pass."""
+    Same construction as lab_matrix.evaluate_game's walk_forward pass.
+    `start` allows a windowed replay (last N draws) — the model still sees
+    the full anterior history, only the scored window shrinks."""
     rng = random.Random(seed)
+    lo = max(warmup, start if start is not None else warmup)
     out: list[dict[str, Any]] = []
-    for i in range(warmup, len(hist)):
+    for i in range(lo, len(hist)):
         pick = set(fn(list(hist[:i]), rng, pick_count))
         out.append({"date": dates[i], "hits": len(pick & set(hist[i]))})
     return out
@@ -240,11 +244,15 @@ def vs_null(series: Sequence[dict[str, Any]], pick_count: int) -> dict[str, Any]
         return {}
     p1 = hypergeom_ge(pick_count, 1)
     k = sum(1 for r in series if r["hits"] >= 1)
-    # two-sided exact binomial p on the ≥1 indicator
-    from math import comb
-    lower = sum(comb(n, i) * p1**i * (1 - p1)**(n - i) for i in range(0, k + 1))
-    upper = sum(comb(n, i) * p1**i * (1 - p1)**(n - i) for i in range(k, n + 1))
-    p_binom = min(1.0, 2 * min(lower, upper))
+    # two-sided exact binomial p on the ≥1 indicator — log-space terms:
+    # comb(n, i) overflows float for n in the thousands.
+    lgamma = math.lgamma
+    def logpmf(i: int) -> float:
+        return (lgamma(n + 1) - lgamma(i + 1) - lgamma(n - i + 1)
+                + i * math.log(p1) + (n - i) * math.log1p(-p1))
+    def tail(lo: int, hi: int) -> float:
+        return min(1.0, sum(math.exp(logpmf(i)) for i in range(lo, hi + 1)))
+    p_binom = min(1.0, 2 * min(tail(0, k), tail(k, n)))
     mean = sum(r["hits"] for r in series) / n
     expected = pick_count * NUMBERS_DRAWN / UNIVERSE
     return {
@@ -340,6 +348,24 @@ def model_profile(
     return profile
 
 
+def weekly_model_matrix(
+    series_by_model: dict[str, list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """Rows: iso_week × mean hits per model — the 'progression' table."""
+    weeks = sorted({iso_week(r["date"]) for s in series_by_model.values()
+                    for r in s})
+    out = []
+    for w in weeks:
+        row: dict[str, Any] = {"iso_week": w, "models": {}}
+        for name, s in series_by_model.items():
+            hits = [r["hits"] for r in s if iso_week(r["date"]) == w]
+            if hits:
+                row["models"][name] = round(sum(hits) / len(hits), 2)
+                row["n_draws"] = row.get("n_draws", 0) or len(hits)
+        out.append(row)
+    return out
+
+
 def game_profile(
     connection: Any,
     draw_type_id: UUID,
@@ -387,6 +413,17 @@ def game_profile(
             out["models"][name]["paired_vs_null"] = paired_vs_null(
                 series, series_by_model[NULL_MODEL],
                 seed=_stable_seed(str(seed), name, "paired"))
+    # per-draw detail for the UI "draw history" table — replayed window:
+    # date, weekday, ISO week, winning numbers and each model's hit count.
+    out["draws"] = [
+        {"date": dates[i].isoformat(), "iso_week": iso_week(dates[i]),
+         "weekday": dates[i].weekday(), "winning": hist[i],
+         "hits": {name: series_by_model[name][i - WARMUP]["hits"]
+                  for name in models}}
+        for i in range(WARMUP, len(hist))
+    ]
+    out["weekly_models"] = weekly_model_matrix(series_by_model)
+    out["model_names"] = list(models)
     return out
 
 
@@ -423,3 +460,73 @@ def prospective_matrix(connection: Any, as_of: date) -> dict[str, Any]:
             }
     return {"as_of": as_of.isoformat(), "source": "prospective_outcomes",
             "matrix": matrix}
+
+
+CARD_WINDOW = 156  # ~26 weeks of draws replayed per card
+
+
+def game_card(
+    connection: Any, draw_type_id: UUID, display_name: str, *,
+    as_of: date, window: int = CARD_WINDOW, pick_count: int = 5,
+    seed: int = SEED, models: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """One game card: windowed walk-forward summary (last `window` draws).
+    Real stats, bounded cost — the full profile loads on game click."""
+    models = models or MODELS
+    hist_pairs = dated_history(connection, draw_type_id, as_of)
+    dates = [d for d, _ in hist_pairs]
+    hist = [nums for _, nums in hist_pairs]
+    card: dict[str, Any] = {
+        "game": display_name,
+        "settled_draws": len(hist),
+        "first_draw": dates[0].isoformat() if dates else None,
+        "last_draw": dates[-1].isoformat() if dates else None,
+        "window_draws": max(0, min(window, len(hist) - WARMUP)),
+    }
+    if len(hist) <= WARMUP + MIN_PRELIMINARY:
+        card["sample_level"] = "insufficient"
+        card["label"] = "Échantillon insuffisant"
+        return card
+    start = max(WARMUP, len(hist) - window)
+    best = None
+    pooled: list[int] = []
+    for name, fn in models.items():
+        series = wf_series(hist, dates, fn, pick_count=pick_count,
+                           seed=_stable_seed(str(seed), name), start=start)
+        pooled.extend(r["hits"] for r in series)
+        agg = _aggregate(series)
+        cons = consistency([r["hits"] for r in series],
+                           [r["date"] for r in series])
+        if name in (NULL_MODEL, "random"):
+            continue
+        if best is None or (agg.get("mean_hits") or -9) > best["mean_hits"]:
+            best = {"model": name, "mean_hits": agg["mean_hits"],
+                    "ge1_pct": agg["ge1_pct"], "ge2_pct": agg["ge2_pct"],
+                    "ge3_pct": agg["ge3_pct"],
+                    "stability": cons.get("stability"),
+                    "consistency_index": cons.get("consistency_index")}
+    card.update({
+        "sample_level": sample_level(len(pooled)),
+        "n_models": len(models),
+        "pooled_mean_hits": round(sum(pooled) / len(pooled), 4) if pooled else None,
+        "dominant_model": best,
+    })
+    return card
+
+
+def game_cards(
+    connection: Any, as_of: date, *, window: int = CARD_WINDOW
+) -> list[dict[str, Any]]:
+    """All game cards — windowed WF replay per game, ordered by volume."""
+    rows = connection.execute(
+        """SELECT DISTINCT ON (dt.display_name) dt.draw_type_id, dt.display_name
+           FROM catalog.draw_types dt
+           JOIN core.draws d ON d.draw_type_id = dt.draw_type_id
+             AND d.status = 'SETTLED' AND d.scheduled_date <= %s
+           ORDER BY dt.display_name, dt.draw_type_id""",
+        (as_of,),
+    ).fetchall()
+    cards = [game_card(connection, tid, name, as_of=as_of, window=window)
+             for tid, name in rows]
+    cards.sort(key=lambda c: c["settled_draws"], reverse=True)
+    return cards
