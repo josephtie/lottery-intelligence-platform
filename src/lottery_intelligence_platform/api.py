@@ -338,6 +338,29 @@ PREDICTIONS_SQL = """
     LIMIT %(limit)s
 """
 
+DRAWS_SQL = """
+    SELECT d.draw_id, dt.display_name AS draw_type, d.scheduled_date,
+           d.status, v.validation_status,
+           (SELECT jsonb_agg(n.number ORDER BY n.position)
+            FROM core.draw_numbers n
+            WHERE n.draw_version_id = v.draw_version_id
+              AND n.number_role = 'WINNING') AS winning_numbers
+    FROM core.draws d
+    JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+    LEFT JOIN LATERAL (
+        SELECT draw_version_id, validation_status FROM core.draw_versions
+        WHERE draw_id = d.draw_id ORDER BY version_number DESC LIMIT 1
+    ) v ON true
+    WHERE d.status IN ('FROZEN', 'SETTLED', 'EXPECTED')
+      AND (%(date)s::date IS NULL OR d.scheduled_date = %(date)s)
+      AND (%(from)s::date IS NULL OR d.scheduled_date >= %(from)s)
+      AND (%(to)s::date IS NULL OR d.scheduled_date <= %(to)s)
+      AND (%(type)s::text IS NULL OR dt.display_name = %(type)s)
+      AND (%(status)s::text IS NULL OR d.status = %(status)s)
+    ORDER BY d.scheduled_date DESC, dt.display_name
+    LIMIT %(limit)s
+"""
+
 
 class ApiHandler(BaseHTTPRequestHandler):
     dsn: str = DEFAULT_DSN
@@ -833,6 +856,28 @@ class ApiHandler(BaseHTTPRequestHandler):
                 self._send({"error": "unauthorized"}, 401)
                 return
         try:
+            if url.path == "/api/draws":
+                qs = parse_qs(url.query)
+                day = (qs.get("date") or [None])[0]
+                date_from = (qs.get("from") or [None])[0]
+                date_to = (qs.get("to") or [None])[0]
+                for raw in (day, date_from, date_to):
+                    if raw is not None:
+                        try:
+                            date.fromisoformat(raw)
+                        except ValueError:
+                            self._send({"error": "dates must be YYYY-MM-DD"}, 400)
+                            return
+                status = (qs.get("status") or [None])[0]
+                if status is not None and status not in ("SETTLED", "FROZEN", "EXPECTED"):
+                    self._send({"error": "invalid status"}, 400)
+                    return
+                limit = min(int((qs.get("limit") or ["100"])[0]), 2000)
+                self._send({"data": self._query(DRAWS_SQL, {
+                    "date": day, "from": date_from, "to": date_to,
+                    "type": (qs.get("type") or [None])[0],
+                    "status": status, "limit": limit})})
+                return
             if url.path == "/api/predictions":
                 qs = parse_qs(url.query)
                 status = (qs.get("status") or [None])[0]
