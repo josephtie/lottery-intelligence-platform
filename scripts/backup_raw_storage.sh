@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; [ -f .env ] && . ./.env; set +a
 
-BACKUP_DIR="${LOTTERY_BACKUP_DIR:-./backups/raw}"
+# Convention: LOTTERY_BACKUP_DIR is the backup ROOT; mirrors go under
+# raw/<stamp>/ so verify_backups.sh sees the same layout everywhere.
+BACKUP_DIR="${LOTTERY_BACKUP_DIR:-./backups}/raw"
 mkdir -p "$BACKUP_DIR"
 BUCKET="${LOTTERY_S3_BUCKET:?LOTTERY_S3_BUCKET must be set}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"

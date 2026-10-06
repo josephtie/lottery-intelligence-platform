@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; [ -f .env ] && . ./.env; set +a
 
-BACKUP_DIR="${LOTTERY_BACKUP_DIR:-./backups/postgres}"
+# Convention: LOTTERY_BACKUP_DIR is the backup ROOT; dumps go under
+# postgres/ so verify_backups.sh sees the same layout everywhere.
+BACKUP_DIR="${LOTTERY_BACKUP_DIR:-./backups}/postgres"
 mkdir -p "$BACKUP_DIR"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="$BACKUP_DIR/lottery_${STAMP}.dump"
