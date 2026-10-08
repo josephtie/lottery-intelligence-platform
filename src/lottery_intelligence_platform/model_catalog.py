@@ -200,6 +200,95 @@ FAMILY_DOCS: dict[str, dict[str, str]] = {
         "rejection_criteria": "Rejected when it cannot beat the random equivalent "
                               "in more than 10% of cells.",
     },
+    "image_numbers": {
+        "priority": "P1",
+        "hypothesis": (
+            "A number's digit-reversal 'image' (57 -> 75, 90 -> 09) appears "
+            "conditionally more often than its marginal rate — tested as an "
+            "association hypothesis, never assumed predictive."
+        ),
+        "formula": (
+            "Directed edges A -> image(A); P(B | A) vs empirical P(B) per "
+            "horizon (same draw, next draw, N-draw window); binomial "
+            "right-tail and seeded permutation p-values; BH FDR per horizon."
+        ),
+        "inputs": "Chronological winning sets per draw type.",
+        "parameters": "horizons=(0,1,3), min_support=5, permutations.",
+        "limitations": (
+            "Out-of-domain reversals (19 -> 91) have no edge; ~75 directed "
+            "tests only, so power is limited; grid-free hypothesis still "
+            "assumes digit reversal is a meaningful operator."
+        ),
+        "rejection_criteria": (
+            "Rejected when no edge keeps q_fdr < 0.05 and OOS lift > 1; an "
+            "in-sample anomaly alone is not a validated advantage."
+        ),
+    },
+    "calling_numbers": {
+        "priority": "P1",
+        "hypothesis": (
+            "Numbers spatially adjacent on the configured grid 'call' each "
+            "other: when A is drawn, its neighbours appear more often than "
+            "baseline — a directional, configurable hypothesis."
+        ),
+        "formula": (
+            "Directed edges A -> Moore-neighbourhood cells (clockwise from "
+            "West); same P(B | A) vs P(B) machinery as image_numbers, per "
+            "horizon, with theoretical and draw-order permutation nulls."
+        ),
+        "inputs": "Winning sets per draw type; the calling grid as config.",
+        "parameters": "grid=DEFAULT_CALLING_GRID, horizons=(0,1,3), min_support=5.",
+        "limitations": (
+            "Grid has duplicated values (first occurrence anchors the "
+            "neighbourhood); numbers absent from the grid have no outgoing "
+            "edges; geometry is symmetric but the measured association may "
+            "not be — both directions are tested separately."
+        ),
+        "rejection_criteria": "Same bar as image_numbers: FDR + OOS replication.",
+    },
+    "calling_image": {
+        "priority": "P1",
+        "hypothesis": (
+            "Images of called numbers add signal beyond calling alone and "
+            "image alone — the interaction is tested, not presumed."
+        ),
+        "formula": (
+            "Edges A -> neighbour and A -> image(neighbour) of the grid; "
+            "metrics identical to the component hypotheses."
+        ),
+        "inputs": "Winning sets; grid config; image map.",
+        "parameters": "horizons=(0,1,3), min_support=5.",
+        "limitations": (
+            "Larger edge set inflates the multiple-testing burden vs H1/H2; "
+            "must be compared against its components, not only against "
+            "chance."
+        ),
+        "rejection_criteria": (
+            "Rejected when it shows no FDR-surviving edges beyond what "
+            "calling_numbers or image_numbers already surface."
+        ),
+    },
+    "calling_image_position": {
+        "priority": "P1",
+        "hypothesis": (
+            "The calling/image association depends on the position of the "
+            "numbers inside the draw result."
+        ),
+        "formula": (
+            "P(B at position q | A at position p) vs P(B at q) for each "
+            "(edge, p, q) — positions never pooled without measurement."
+        ),
+        "inputs": "Position-ordered winning numbers per draw type.",
+        "parameters": "max_pos = draw size, min_support=5.",
+        "limitations": (
+            "~25 (p, q) sub-tests per edge: severe multiple-testing load and "
+            "low per-cell support; positional recording must be reliable."
+        ),
+        "rejection_criteria": (
+            "Rejected when positional cells do not beat the non-positional "
+            "edges after FDR, or fail OOS replication."
+        ),
+    },
 }
 
 

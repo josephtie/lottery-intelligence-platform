@@ -299,7 +299,14 @@ def _history(
 # matrix evaluation); these wrappers just load history and seed the rng.
 # ---------------------------------------------------------------------------
 
-from lottery_intelligence_platform import lab_models
+from lottery_intelligence_platform import calling_image, lab_models
+
+# Hist-functions available to cohort pickers: the ported lab models plus the
+# CALLING_IMAGE family (same (hist, rng, k) interface).
+_HIST_REGISTRY: dict[str, Any] = {
+    **lab_models.HIST_MODELS,
+    **calling_image.CALLING_IMAGE_MODELS,
+}
 
 
 def _rng(seed: int | None, code: str, draw_type_id: UUID, target: date) -> random.Random:
@@ -311,7 +318,7 @@ def _lab_picker(
     stochastic: bool,
 ) -> Callable[[Any, UUID, date, Mapping[str, Any], int | None], list[int]]:
     """Adapt a lab_models hist-function to the cohort picker signature."""
-    fn = lab_models.HIST_MODELS[code]
+    fn = _HIST_REGISTRY[code]
 
     def pick(
         connection: Any, draw_type_id: UUID, target: date,
@@ -333,6 +340,10 @@ pick_balanced_v1 = _lab_picker("balanced_v1", stochastic=False)
 pick_bayesian_v1 = _lab_picker("bayesian_v1", stochastic=True)
 pick_monte_carlo_v1 = _lab_picker("monte_carlo_v1", stochastic=True)
 pick_ensemble_v1 = _lab_picker("ensemble_v1", stochastic=False)
+pick_calling_numbers = _lab_picker("calling_numbers", stochastic=False)
+pick_image_numbers = _lab_picker("image_numbers", stochastic=False)
+pick_calling_image = _lab_picker("calling_image", stochastic=False)
+pick_calling_image_position = _lab_picker("calling_image_position", stochastic=False)
 
 
 
@@ -350,6 +361,10 @@ PICKERS: dict[str, Callable[[Any, UUID, date, Mapping[str, Any], int | None], li
     "bayesian_v1": pick_bayesian_v1,
     "monte_carlo_v1": pick_monte_carlo_v1,
     "ensemble_v1": pick_ensemble_v1,
+    "calling_numbers": pick_calling_numbers,
+    "image_numbers": pick_image_numbers,
+    "calling_image": pick_calling_image,
+    "calling_image_position": pick_calling_image_position,
 }
 
 LAB_GENERATOR_CODES: tuple[str, ...] = tuple(
@@ -367,8 +382,16 @@ LAB_MODEL_FAMILIES: dict[str, str] = {
     "bayesian_v1": "PREDICTIVE",
     "monte_carlo_v1": "PREDICTIVE",
     "ensemble_v1": "PREDICTIVE",
+    # research.model_versions.family is a coarse enum (CHECK constraint);
+    # the CALLING_IMAGE grouping lives in the codes, the picker registry and
+    # the catalog — at the DB level these are predictive candidates.
+    "calling_numbers": "PREDICTIVE",
+    "image_numbers": "PREDICTIVE",
+    "calling_image": "PREDICTIVE",
+    "calling_image_position": "PREDICTIVE",
 }
 _STOCHASTIC_CODES = {"random", "bayesian_v1", "monte_carlo_v1"}
+CALLING_IMAGE_CODES = frozenset(calling_image.CALLING_IMAGE_MODELS)
 
 
 def register_lab_cohort(
@@ -413,7 +436,11 @@ def register_lab_cohort(
             family=LAB_MODEL_FAMILIES.get(code, "PREDICTIVE"),
             definition={
                 "picker": code, "pick_count": DEFAULT_PICK_COUNT,
-                "source": "lottery-statistics-expert models/models.py",
+                "source": (
+                    "calling_image.py grid/image hypothesis"
+                    if code in CALLING_IMAGE_CODES
+                    else "lottery-statistics-expert models/models.py"
+                ),
                 "stochastic": code in _STOCHASTIC_CODES,
             },
         )

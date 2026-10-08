@@ -25,6 +25,7 @@ from uuid import UUID
 import psycopg
 
 from lottery_intelligence_platform import (
+    calling_image,
     game_temporal,
     lab_matrix,
     structure_analysis,
@@ -718,6 +719,47 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._matrix_cache[cache_key] = result
         return result
 
+    _calling_image_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_calling_image(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """CALLING_IMAGE family — H1..H4 directional edge study for one
+        draw type. Associations vs theoretical + permutation nulls, FDR per
+        horizon, OOS replication. An anomaly is a candidate, never a verdict."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        try:
+            permutations = min(int((qs.get("permutations") or ["99"])[0]), 499)
+        except ValueError:
+            return {"error": "permutations must be numeric"}
+        cache_key = f"{draw_type}:{permutations}"
+        if cache_key in self._calling_image_cache:
+            return self._calling_image_cache[cache_key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt_row
+            from lottery_intelligence_platform.prediction_generation import (
+                _history,
+            )
+            hist = _history(conn, draw_type_id, date(2100, 1, 1))
+        if len(hist) < lab_matrix.MIN_DRAWS + lab_matrix.MIN_WF:
+            return {"error": "not enough settled draws",
+                    "minimum": lab_matrix.MIN_DRAWS + lab_matrix.MIN_WF}
+        result = calling_image.evaluate_family(
+            hist,
+            permutations=permutations,
+            seed=calling_image._stable_seed("api", display_name),
+        )
+        result["draw_type"] = display_name
+        self._calling_image_cache[cache_key] = result
+        return result
+
     _game_profiles_cache: dict[str, dict[str, Any]] = {}
 
     def _lab_game_profiles(self, qs: dict[str, list[str]]) -> dict[str, Any]:
@@ -915,6 +957,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/matrix":
                 self._send(self._lab_matrix(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/calling-image":
+                self._send(self._lab_calling_image(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/candidates":
                 self._send(self._lab_candidates(parse_qs(url.query)))

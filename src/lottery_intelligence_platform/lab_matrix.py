@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from lottery_intelligence_platform import lab_models
+from lottery_intelligence_platform import calling_image, lab_models
 from lottery_intelligence_platform.prediction_generation import _history
 
 SEED = 20260930
@@ -40,6 +40,7 @@ MATRIX_MODELS: dict[str, Any] = {
     "top_k_frequency": lab_models.predict_top_k,
     "rolling_frequency": lab_models.predict_rolling,
     "bayesian_shrinkage": lab_models.predict_bayesian_shrinkage,
+    **calling_image.CALLING_IMAGE_MODELS,
 }
 
 
