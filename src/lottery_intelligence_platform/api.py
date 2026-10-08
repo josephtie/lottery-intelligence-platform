@@ -29,6 +29,7 @@ from lottery_intelligence_platform import (
     game_temporal,
     lab_matrix,
     structure_analysis,
+    structure_map,
     turbo2_view,
 )
 from lottery_intelligence_platform.dependence import pair_dependence_tests
@@ -760,6 +761,103 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._calling_image_cache[cache_key] = result
         return result
 
+    _structure_map_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_structure_map(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Structure Map — full audit of one draw process: frequency
+        windows, autocorrelation, unconstrained 90x90 transitions,
+        positional structure, runs/delay, change point, seasonality,
+        calling/image — each vs its declared null, FDR + OOS holdout.
+        light=1 skips the full transition matrix."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        try:
+            permutations = min(int((qs.get("permutations") or ["200"])[0]),
+                               499)
+        except ValueError:
+            return {"error": "permutations must be numeric"}
+        light = (qs.get("light") or ["0"])[0] in ("1", "true")
+        cache_key = f"{draw_type}:{permutations}:{light}"
+        if cache_key in self._structure_map_cache:
+            return self._structure_map_cache[cache_key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt_row
+            from lottery_intelligence_platform.prediction_generation import (
+                _history,
+            )
+            hist = _history(conn, draw_type_id, date(2100, 1, 1))
+            dated = game_temporal.dated_history(
+                conn, draw_type_id, date(2100, 1, 1))
+        if len(hist) < 60:
+            return {"error": "not enough settled draws", "minimum": 60}
+        result = structure_map.build_structure_map(
+            hist, dated=dated, permutations=permutations,
+            seed=calling_image._stable_seed("structure-map", display_name),
+            light=light)
+        result["draw_type"] = display_name
+        self._structure_map_cache[cache_key] = result
+        return result
+
+    _cross_game_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_cross_game(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Cross-game structure: ordered intra-day transitions X -> Y
+        (adjacent games by scheduled_sequence), overlap vs NULL B
+        permutation and calling-edge density. min_days guards thin pairs."""
+        try:
+            permutations = min(int((qs.get("permutations") or ["300"])[0]),
+                               999)
+            days = int((qs.get("days") or ["0"])[0])
+        except ValueError:
+            return {"error": "permutations/days must be numeric"}
+        cache_key = f"cross:{permutations}:{days}"
+        if cache_key in self._cross_game_cache:
+            return self._cross_game_cache[cache_key]
+        clause = ("AND d.scheduled_date >= CURRENT_DATE - %s"
+                  if days > 0 else "")
+        params: tuple[Any, ...] = (days,) if days > 0 else ()
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            rows = conn.execute(
+                f"""SELECT d.scheduled_date, d.scheduled_sequence,
+                           dt.display_name, n.number
+                    FROM core.draws d
+                    JOIN catalog.draw_types dt
+                      ON dt.draw_type_id = d.draw_type_id
+                    JOIN core.draw_versions v
+                      ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                    JOIN core.draw_numbers n
+                      ON n.draw_version_id = v.draw_version_id
+                     AND n.number_role = 'WINNING'
+                    WHERE 1=1 {clause}
+                    ORDER BY d.scheduled_date, d.scheduled_sequence,
+                             n.position""",
+                params,
+            ).fetchall()
+        day_games: dict[Any, dict[str, tuple[int, list[int]]]] = {}
+        for draw_date, seq, game, number in rows:
+            day = day_games.setdefault(draw_date, {})
+            entry = day.setdefault(game, (seq, []))
+            entry[1].append(number)
+        flat = {
+            day: [(seq, game, nums)
+                  for game, (seq, nums) in games.items()]
+            for day, games in day_games.items()
+        }
+        result = structure_map.cross_game(
+            flat, permutations=permutations,
+            seed=calling_image._stable_seed("cross-game"))
+        result["n_days"] = len(flat)
+        self._cross_game_cache[cache_key] = result
+        return result
+
     _game_profiles_cache: dict[str, dict[str, Any]] = {}
 
     def _lab_game_profiles(self, qs: dict[str, list[str]]) -> dict[str, Any]:
@@ -960,6 +1058,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/calling-image":
                 self._send(self._lab_calling_image(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/structure-map":
+                self._send(self._lab_structure_map(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/cross-game":
+                self._send(self._lab_cross_game(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/candidates":
                 self._send(self._lab_candidates(parse_qs(url.query)))

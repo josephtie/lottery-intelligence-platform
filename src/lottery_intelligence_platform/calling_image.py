@@ -20,6 +20,7 @@ ground truth — pass a different one to `calling_edges` to test another.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import random
 from typing import Any, Iterable, Mapping, Sequence
@@ -221,14 +222,19 @@ def _window_baselines(
     n_windows = n - horizon
     if n_windows <= 0:
         return {}
-    return {
-        b: sum(
-            1
-            for i in range(n_windows)
-            if any(i < j <= i + horizon for j in presence[b])
-        ) / n_windows
-        for b in DOMAIN
-    }
+    out: dict[int, float] = {}
+    for b in DOMAIN:
+        idx = sorted(presence[b])
+        covered = 0
+        prev_end = -1
+        for j in idx:
+            lo = max(0, j - horizon, prev_end + 1)
+            hi = min(n_windows - 1, j - 1)
+            if hi >= lo:
+                covered += hi - lo + 1
+                prev_end = hi
+        out[b] = covered / n_windows
+    return out
 
 
 def _edge_counts(
@@ -237,19 +243,22 @@ def _edge_counts(
     a: int,
     b: int,
     horizon: int,
+    presence_sorted: Mapping[int, list[int]] | None = None,
 ) -> tuple[int, int]:
     """(n_trigger, hits) for edge A -> B at the given horizon."""
     if horizon == 0:
         triggers = presence[a]
         return len(triggers), len(triggers & presence.get(b, set()))
+    if presence_sorted is None:
+        presence_sorted = {num: sorted(idx) for num, idx in presence.items()}
     valid = n - horizon
-    triggers = [i for i in presence[a] if i < valid]
-    idx_b = presence.get(b, set())
-    hits = sum(
-        1
-        for i in triggers
-        if any(i < j <= i + horizon for j in idx_b)
-    )
+    triggers = [i for i in presence_sorted[a] if i < valid]
+    idx_b = presence_sorted.get(b, [])
+    hits = 0
+    for i in triggers:
+        j = bisect.bisect_right(idx_b, i)
+        if j < len(idx_b) and idx_b[j] <= i + horizon:
+            hits += 1
     return len(triggers), hits
 
 
@@ -287,11 +296,13 @@ def evaluate_edges(
     n = len(hist)
     sets = [frozenset(d) for d in hist]
     presence = _presence(sets)
+    presence_sorted = {num: sorted(idx) for num, idx in presence.items()}
     baselines = _window_baselines(sets, presence, horizon)
     rows: list[dict[str, Any]] = []
     skipped = 0
     for a, b in edge_pairs:
-        n_trigger, hits = _edge_counts(presence, n, a, b, horizon)
+        n_trigger, hits = _edge_counts(
+            presence, n, a, b, horizon, presence_sorted)
         if n_trigger < min_support:
             skipped += 1
             continue

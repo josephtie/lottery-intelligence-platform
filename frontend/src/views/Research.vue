@@ -13,6 +13,7 @@
   <LabCandidates v-else-if="tab === 'candidates'" />
   <ProspectiveH008 v-else-if="tab === 'prospective'" />
   <LabStructure v-else-if="tab === 'structure'" />
+  <StructureMap v-else-if="tab === 'structuremap'" />
   <LabCallingImage v-else-if="tab === 'calling'" />
   <LabSimulation v-else-if="tab === 'simulation'" />
   <GameProfiles v-else-if="tab === 'profiles'" />
@@ -71,6 +72,7 @@ import LabCandidates from '../components/LabCandidates.vue'
 import ProspectiveH008 from '../components/ProspectiveH008.vue'
 import LabStructure from '../components/LabStructure.vue'
 import LabCallingImage from '../components/LabCallingImage.vue'
+import StructureMap from '../components/StructureMap.vue'
 import LabSimulation from '../components/LabSimulation.vue'
 import GameProfiles from '../components/GameProfiles.vue'
 import Journal from '../components/Journal.vue'
@@ -90,6 +92,8 @@ const tabs = [
     desc: 'Si on jouait vraiment : combien on miserait, ce qu\'on récupérerait, le risque de tout perdre. Et comment répartir les numéros entre grilles.' },
   { id: 'structure', label: '🧬 Le tirage est-il normal ?',
     desc: 'Tests statistiques sur l\'historique : fréquences équilibrées ? mémoire entre tirages ? rupture ? Réponse honnête attendue : « compatible avec le hasard ».' },
+  { id: 'structuremap', label: '🗺️ Carte de structure',
+    desc: 'Le processus de tirage a-t-il une structure ? Fréquences fenêtrées, transitions 90×90, positions, retards, ruptures, saisonnalité, cross-game — chaque famille contre son null, FDR + OOS. INTERESTING ≠ prédictif.' },
   { id: 'calling', label: '🧲 Numéros appelés',
     desc: 'Hypothèses directionnelles : numéro image (57→75) et numéros « appelés » par proximité sur la grille. Chaque arête A→B est mesurée contre le hasard — une association n\'est jamais une promesse.' },
   { id: 'journal', label: '📚 Carnet de recherche',
