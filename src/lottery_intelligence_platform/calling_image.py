@@ -663,19 +663,23 @@ def predict_calling_image_position(hist, rng, k) -> list[int]:
     last = hist[-1]
     past = hist[:-1]
     freq = _frequency(past)
+    # single pass over `past`: co[(a, b)][p][q] counts — semantics identical
+    # to the per-cell scan, O(len(past) × pos²) instead of O(len(past) ×
+    # pos² × edges).
+    co: dict[tuple[int, int], dict[int, dict[int, int]]] = {}
+    for d in past:
+        for p, a in enumerate(d):
+            for q, b in enumerate(d):
+                cell = co.setdefault((a, b), {})
+                row = cell.setdefault(p, {})
+                row[q] = row.get(q, 0) + 1
     scores: dict[int, int] = {}
     for p, a in enumerate(last):
         for b in CALLING_IMAGE_EDGES.get(a, []):
             if not NUMBER_MIN <= b <= NUMBER_MAX:
                 continue
-            best = 0
-            for q in range(len(last)):
-                count = sum(
-                    1
-                    for d in past
-                    if p < len(d) and q < len(d) and d[p] == a and d[q] == b
-                )
-                best = max(best, count)
+            cell = co.get((a, b))
+            best = max(cell[p].values()) if cell and p in cell else 0
             scores[b] = scores.get(b, 0) + best
     ranked = sorted(scores, key=lambda b: (-scores[b], -freq.get(b, 0), b))
     return _fill(hist, ranked[:k], k)
