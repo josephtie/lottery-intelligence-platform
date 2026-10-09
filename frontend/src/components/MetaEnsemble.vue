@@ -7,6 +7,9 @@
         <option v-for="t in types" :key="t.code + t.display_name" :value="t.display_name">
           {{ t.display_name }}</option>
       </select>
+      <input type="date" v-model="asOf" @change="changeGame"
+             title="Vide = consensus pour le prochain tirage · une date = consensus calculé avant ce tirage" />
+      <button v-if="asOf" class="tab" @click="asOf = ''; changeGame()">prochain</button>
       <button v-for="s in strategies" :key="s" class="tab"
               :class="{ active: strategy === s }" @click="strategy = s">
         {{ s === 'CONSENSUS_COUNT' ? 'Vote simple' : 'Vote par famille' }}</button>
@@ -132,6 +135,7 @@ const FAMILY_LABELS: Record<string, string> = {
 
 const types = ref<any[]>([])
 const drawType = ref('')
+const asOf = ref('')
 const data = ref<any>(null)
 const matrix = ref<any>(null)
 const loading = ref(false)
@@ -191,8 +195,8 @@ async function load() {
   if (!drawType.value) return
   loading.value = true; error.value = ''; data.value = null; selected.value = null
   try {
-    const res = await api.get('/api/lab/consensus',
-      { params: { draw_type: drawType.value } })
+    const res = await api.get('/api/lab/consensus', { params: {
+      draw_type: drawType.value, date: asOf.value || undefined } })
     if (res.data.error) error.value = res.data.error
     else data.value = res.data
   } catch (e: any) {
