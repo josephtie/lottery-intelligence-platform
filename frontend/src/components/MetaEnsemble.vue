@@ -3,7 +3,7 @@
     <h3>🤝 Consensus des modèles — meta-ensemble</h3>
 
     <div class="filters">
-      <select v-model="drawType" @change="load">
+      <select v-model="drawType" @change="changeGame">
         <option v-for="t in types" :key="t.code + t.display_name" :value="t.display_name">
           {{ t.display_name }}</option>
       </select>
@@ -51,7 +51,7 @@
       </div>
 
       <!-- Détail repliable -->
-      <details class="detail-box">
+      <details class="detail-box" @toggle="onDetailToggle">
         <summary>Voir le détail (matrice des votes, classement complet, comparaison)</summary>
 
         <h4 style="margin:12px 0 6px">Classement complet</h4>
@@ -136,6 +136,7 @@ const data = ref<any>(null)
 const matrix = ref<any>(null)
 const loading = ref(false)
 const matrixLoading = ref(false)
+const matrixRequested = ref(false)
 const error = ref('')
 const strategies = ['CONSENSUS_COUNT', 'CONSENSUS_FAMILY']
 const strategy = ref('CONSENSUS_COUNT')
@@ -199,6 +200,18 @@ async function load() {
   } finally { loading.value = false }
 }
 
+function changeGame() {
+  matrix.value = null; matrixRequested.value = false
+  load()
+}
+
+function onDetailToggle(e: Event) {
+  if ((e.target as HTMLDetailsElement).open && !matrixRequested.value) {
+    matrixRequested.value = true
+    loadMatrix()
+  }
+}
+
 async function loadMatrix() {
   if (!drawType.value) return
   matrixLoading.value = true
@@ -217,7 +230,7 @@ onMounted(async () => {
       .sort((a: any, b: any) => b.settled_draws - a.settled_draws)
     if (types.value.length) {
       drawType.value = types.value[0].display_name
-      load(); loadMatrix()
+      load()
     }
   } catch (e: any) { error.value = e.response?.data?.error || e.message }
 })
