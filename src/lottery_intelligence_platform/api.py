@@ -28,6 +28,7 @@ from lottery_intelligence_platform import (
     calling_image,
     game_temporal,
     lab_matrix,
+    meta_ensemble,
     structure_analysis,
     structure_map,
     turbo2_view,
@@ -766,6 +767,46 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._calling_image_cache[cache_key] = result
         return result
 
+    _consensus_cache: dict[str, dict[str, Any]] = {}
+
+    def _lab_consensus(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Meta-ensemble — deterministic consensus of the lab pickers for
+        one draw type. `date` (YYYY-MM-DD) replays the consensus computed
+        strictly from draws before that date (as-of view, no look-ahead);
+        omit for the next-draw consensus on full history."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        if not draw_type:
+            return {"error": "draw_type is required"}
+        try:
+            k = min(int((qs.get("k") or ["5"])[0]), 10)
+            d_to = (date.fromisoformat(v) if (v := (qs.get("date") or [""])[0])
+                    else date(2100, 1, 1))
+        except ValueError:
+            return {"error": "k must be numeric; date must be YYYY-MM-DD"}
+        cache_key = f"{draw_type}:{k}:{d_to}"
+        if cache_key in self._consensus_cache:
+            return self._consensus_cache[cache_key]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            dt_row = conn.execute(
+                """SELECT draw_type_id, display_name FROM catalog.draw_types
+                   WHERE code = %s OR display_name = %s""",
+                (draw_type, draw_type),
+            ).fetchone()
+            if dt_row is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt_row
+            from lottery_intelligence_platform.prediction_generation import (
+                _history,
+            )
+            hist = _history(conn, draw_type_id, d_to)
+        if len(hist) < 20:
+            return {"error": "not enough settled draws", "minimum": 20}
+        result = meta_ensemble.detail(hist, k)
+        result["draw_type"] = display_name
+        result["as_of"] = d_to.isoformat() if d_to.year < 2100 else "next"
+        self._consensus_cache[cache_key] = result
+        return result
+
     _structure_map_cache: dict[str, dict[str, Any]] = {}
 
     def _lab_structure_map(self, qs: dict[str, list[str]]) -> dict[str, Any]:
@@ -1071,6 +1112,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/calling-image":
                 self._send(self._lab_calling_image(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/consensus":
+                self._send(self._lab_consensus(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/structure-map":
                 self._send(self._lab_structure_map(parse_qs(url.query)))

@@ -1,5 +1,15 @@
 <template>
   <h2 class="page-title">🔮 Prédictions</h2>
+  <div class="tabbar">
+    <div class="tabgroup">
+      <button class="tab" :class="{ active: tab === 'sealed' }"
+              @click="tab = 'sealed'">🔒 prédictions scellées</button>
+      <button class="tab" :class="{ active: tab === 'consensus' }"
+              @click="tab = 'consensus'">🤝 consensus des modèles</button>
+    </div>
+  </div>
+
+  <template v-if="tab === 'sealed'">
   <div class="filters">
     <input type="date" v-model="day" @change="load" title="Date du tirage cible" />
     <input type="date" v-model="from" @change="load" title="Du" />
@@ -60,13 +70,18 @@
       </tr>
     </table>
   </div>
+  </template>
+
+  <MetaEnsemble v-else />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import api from '../api'
 import { useFetch, needsToken } from '../useFetch'
+import MetaEnsemble from '../components/MetaEnsemble.vue'
 
+const tab = ref<'sealed' | 'consensus'>('sealed')
 const status = ref('')
 const day = ref('')
 const from = ref('')
@@ -103,6 +118,13 @@ function turbo(o: any) {
 </script>
 
 <style scoped>
+.tabbar { display: flex; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.tabgroup { display: flex; gap: 4px; align-items: center; }
+.tab {
+  background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+}
+.tab.active { background: var(--gold); color: #111; font-weight: 700; border-color: var(--gold); }
 .legend { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
 .turbo-ball {
   background: var(--gold); color: #111;

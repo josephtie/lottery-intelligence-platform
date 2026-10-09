@@ -299,13 +299,15 @@ def _history(
 # matrix evaluation); these wrappers just load history and seed the rng.
 # ---------------------------------------------------------------------------
 
-from lottery_intelligence_platform import calling_image, lab_models
+from lottery_intelligence_platform import (calling_image, lab_models,
+                                           meta_ensemble)
 
 # Hist-functions available to cohort pickers: the ported lab models plus the
-# CALLING_IMAGE family (same (hist, rng, k) interface).
+# CALLING_IMAGE and META_ENSEMBLE families (same (hist, rng, k) interface).
 _HIST_REGISTRY: dict[str, Any] = {
     **lab_models.HIST_MODELS,
     **calling_image.CALLING_IMAGE_MODELS,
+    **meta_ensemble.META_ENSEMBLE_MODELS,
 }
 
 
@@ -344,6 +346,8 @@ pick_calling_numbers = _lab_picker("calling_numbers", stochastic=False)
 pick_image_numbers = _lab_picker("image_numbers", stochastic=False)
 pick_calling_image = _lab_picker("calling_image", stochastic=False)
 pick_calling_image_position = _lab_picker("calling_image_position", stochastic=False)
+pick_meta_consensus_count = _lab_picker("meta_consensus_count", stochastic=False)
+pick_meta_consensus_family = _lab_picker("meta_consensus_family", stochastic=False)
 
 
 
@@ -365,6 +369,8 @@ PICKERS: dict[str, Callable[[Any, UUID, date, Mapping[str, Any], int | None], li
     "image_numbers": pick_image_numbers,
     "calling_image": pick_calling_image,
     "calling_image_position": pick_calling_image_position,
+    "meta_consensus_count": pick_meta_consensus_count,
+    "meta_consensus_family": pick_meta_consensus_family,
 }
 
 LAB_GENERATOR_CODES: tuple[str, ...] = tuple(
@@ -389,6 +395,9 @@ LAB_MODEL_FAMILIES: dict[str, str] = {
     "image_numbers": "PREDICTIVE",
     "calling_image": "PREDICTIVE",
     "calling_image_position": "PREDICTIVE",
+    # Meta-ensemble: deterministic consensus over the lab pickers.
+    "meta_consensus_count": "ENSEMBLE",
+    "meta_consensus_family": "ENSEMBLE",
 }
 _STOCHASTIC_CODES = {"random", "bayesian_v1", "monte_carlo_v1"}
 CALLING_IMAGE_CODES = frozenset(calling_image.CALLING_IMAGE_MODELS)

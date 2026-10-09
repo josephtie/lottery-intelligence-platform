@@ -289,6 +289,55 @@ FAMILY_DOCS: dict[str, dict[str, str]] = {
             "edges after FDR, or fail OOS replication."
         ),
     },
+    "meta_consensus_count": {
+        "priority": "P1",
+        "hypothesis": (
+            "Inter-model agreement carries information: numbers appearing in "
+            "many contributors' top-k outperform the contributors' own "
+            "average — tested, not presumed."
+        ),
+        "formula": (
+            "Each of 14 deterministic contributors votes with its top-k; "
+            "ranking by vote count, tie-break Borda then number asc. "
+            "Excludes random/nulls/ensemble_v1 (references, double count)."
+        ),
+        "inputs": "Top-k of every lab picker computed on history up to t only.",
+        "parameters": "k=5; declared families; deterministic per-code rng.",
+        "limitations": (
+            "Contributors are correlated (many frequency variants); if all "
+            "are at chance the vote majority remains at chance — the "
+            "consensus cannot manufacture signal."
+        ),
+        "rejection_criteria": (
+            "Rejected when it does not beat both uniform-weight reference "
+            "and ensemble_v1 after FDR, OOS and walk-forward."
+        ),
+    },
+    "meta_consensus_family": {
+        "priority": "P1",
+        "hypothesis": (
+            "Same as meta_consensus_count but family-balanced: agreement "
+            "across independent methodological families is more informative "
+            "than agreement within one over-represented family."
+        ),
+        "formula": (
+            "Per family: share of member models voting for each number; a "
+            "number's score is the mean share over families — families "
+            "weigh equally regardless of size. Tie-break: raw votes then "
+            "number asc."
+        ),
+        "inputs": "Top-k votes grouped by the declared MODEL_FAMILIES map.",
+        "parameters": "6 declared families; k=5.",
+        "limitations": (
+            "Families are declared, not estimated; a miscoded grouping "
+            "changes the ranking. With 4 calling_image models and 1 "
+            "simulation, shares differ from raw counts by design."
+        ),
+        "rejection_criteria": (
+            "Rejected when family balancing adds nothing over the raw "
+            "count strategy and neither beats the nulls after correction."
+        ),
+    },
 }
 
 
