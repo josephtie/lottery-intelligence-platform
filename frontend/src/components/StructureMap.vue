@@ -14,6 +14,10 @@
         <option v-for="t in types" :key="t.code + t.display_name" :value="t.display_name">
           {{ t.display_name }} ({{ t.settled_draws }} tirages)</option>
       </select>
+      <input type="date" v-model="fromDate" @change="load" title="début de l'intervalle" />
+      <input type="date" v-model="toDate" @change="load" title="fin de l'intervalle" />
+      <button class="tab" @click="fromDate = ''; toDate = ''; load()"
+              title="toute l'histoire">tout</button>
       <button class="tab" :class="{ active: light }" @click="light = !light; load()"
               title="light : sans la matrice de transition 90×90 complète">
         {{ light ? 'mode light' : 'matrice complète' }}</button>
@@ -23,10 +27,28 @@
     <template v-else-if="result">
       <div class="sub" style="margin-bottom:8px">
         {{ result.draw_type }} · {{ result.n_draws }} tirages
-        (train {{ result.train_size }} + holdout {{ result.holdout_size }})
+        ({{ result.date_range?.from }} → {{ result.date_range?.to }} ·
+        train {{ result.train_size }} + holdout {{ result.holdout_size }})
         · verdict global :
         <b :class="verdictClass">{{ result.verdict }}</b>
       </div>
+      <table class="data mb0" v-if="result.attention_numbers?.length"
+             style="margin-bottom:10px">
+        <tr><th colspan="6" style="text-align:left">
+          ⚠ Numéros d'attention — flaggés par ≥ 1 famille (candidats, pas des signaux)
+        </th></tr>
+        <tr><th>Numéro</th><th>Familles</th><th>Pire q</th><th>Sens</th>
+            <th>arêtes sort.</th><th>arêtes entr.</th></tr>
+        <tr v-for="w in result.attention_numbers" :key="w.number">
+          <td class="mono"><b>{{ w.number }}</b></td>
+          <td class="mono">{{ w.families.map(familyLabel).join(', ') }}</td>
+          <td class="mono">{{ w.worst_q }}</td>
+          <td class="mono" :class="w.direction === 'hot' ? 'badge-warn' : ''">
+            {{ w.direction }}</td>
+          <td class="mono">{{ w.edges_out }}</td>
+          <td class="mono">{{ w.edges_in }}</td>
+        </tr>
+      </table>
       <table class="data mb0">
         <tr><th>Famille</th><th>Null</th><th>tests</th><th>significatifs</th>
             <th>min q</th><th>OOS</th><th>Statut</th></tr>
@@ -125,6 +147,8 @@ const FAMILY_LABELS: Record<string, string> = {
 
 const types = ref<any[]>([])
 const drawType = ref('')
+const fromDate = ref('')
+const toDate = ref('')
 const result = ref<any>(null)
 const loading = ref(false)
 const error = ref('')
@@ -183,8 +207,12 @@ async function load() {
   if (!drawType.value) return
   loading.value = true; error.value = ''; result.value = null; open.value = ''
   try {
-    const res = await api.get('/api/lab/structure-map',
-      { params: { draw_type: drawType.value, light: light.value ? 1 : 0 } })
+    const res = await api.get('/api/lab/structure-map', { params: {
+      draw_type: drawType.value,
+      light: light.value ? 1 : 0,
+      ...(fromDate.value && { from: fromDate.value }),
+      ...(toDate.value && { to: toDate.value }),
+    }})
     if (res.data.error) error.value = res.data.error
     else result.value = res.data
   } catch (e: any) {

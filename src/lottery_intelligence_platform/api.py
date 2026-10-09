@@ -775,10 +775,15 @@ class ApiHandler(BaseHTTPRequestHandler):
         try:
             permutations = min(int((qs.get("permutations") or ["200"])[0]),
                                499)
+            d_from = (date.fromisoformat(v) if (v := (qs.get("from") or [""])[0])
+                      else None)
+            d_to = (date.fromisoformat(v) if (v := (qs.get("to") or [""])[0])
+                    else None)
         except ValueError:
-            return {"error": "permutations must be numeric"}
+            return {"error": "permutations must be numeric; "
+                             "from/to must be YYYY-MM-DD"}
         light = (qs.get("light") or ["0"])[0] in ("1", "true")
-        cache_key = f"{draw_type}:{permutations}:{light}"
+        cache_key = f"{draw_type}:{permutations}:{light}:{d_from}:{d_to}"
         if cache_key in self._structure_map_cache:
             return self._structure_map_cache[cache_key]
         with psycopg.connect(self.dsn, autocommit=True) as conn:
@@ -790,12 +795,11 @@ class ApiHandler(BaseHTTPRequestHandler):
             if dt_row is None:
                 return {"error": f"unknown draw_type: {draw_type}"}
             draw_type_id, display_name = dt_row
-            from lottery_intelligence_platform.prediction_generation import (
-                _history,
-            )
-            hist = _history(conn, draw_type_id, date(2100, 1, 1))
             dated = game_temporal.dated_history(
-                conn, draw_type_id, date(2100, 1, 1))
+                conn, draw_type_id, d_to or date(2100, 1, 1))
+        if d_from is not None:
+            dated = [(d, nums) for d, nums in dated if d >= d_from]
+        hist = [nums for _, nums in dated]
         if len(hist) < 60:
             return {"error": "not enough settled draws", "minimum": 60}
         result = structure_map.build_structure_map(
@@ -803,6 +807,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             seed=calling_image._stable_seed("structure-map", display_name),
             light=light)
         result["draw_type"] = display_name
+        result["date_range"] = {
+            "from": str(d_from) if d_from else str(dated[0][0]),
+            "to": str(d_to) if d_to else str(dated[-1][0]),
+        }
         self._structure_map_cache[cache_key] = result
         return result
 

@@ -242,6 +242,9 @@ def frequency_windows(
         "significant": sum(r["significant"] for r in rows),
         "min_q": _min_q(rows),
         "top": rows[:15],
+        "flagged": [{"number": r["number"], "window": r["window"],
+                     "z": r["z"], "q_fdr": r["q_fdr"]}
+                    for r in rows if r["significant"]],
         "flag_keys": [(r["number"], r["window"]) for r in rows
                       if r["significant"]],
     }
@@ -540,6 +543,9 @@ def runs_delay(
         "delay_top": sorted(delay_rows,
                             key=lambda r: (r["q_fdr"], -r["lift"]))[:15],
         "runs_top": sorted(run_rows, key=lambda r: r["q_fdr"])[:15],
+        "flagged": [{"number": r["number"],
+                     "lift": r.get("lift", 0), "q_fdr": r["q_fdr"]}
+                    for r in rows_all if r["significant"]],
         "flag_keys": [(r["number"], r.get("delay_bucket", "run"))
                       for r in rows_all if r["significant"]],
     }
@@ -789,6 +795,71 @@ def calling_image_family(
 
 
 # ---------------------------------------------------------------------------
+# Watchlist — numbers that accumulate flags across families
+# ---------------------------------------------------------------------------
+
+
+def _attention_numbers(
+    families: Mapping[str, Any], limit: int = 20
+) -> list[dict[str, Any]]:
+    """Aggregate every FDR-flagged cell into per-number attention entries.
+
+    A number earns attention when a family flags a cell involving it:
+    frequency window deviations (hot/cold direction), delay/return cells,
+    run outliers, and transition/autocorrelation edges (the *target* B is
+    the number that "shows up" — A is context).
+    """
+    agg: dict[int, dict[str, Any]] = defaultdict(
+        lambda: {"families": set(), "worst_q": 1.0, "hot": 0, "cold": 0,
+                 "edges_out": 0, "edges_in": 0})
+
+    fr = families.get("frequency", {})
+    for r in fr.get("flagged", []):
+        e = agg[r["number"]]
+        e["families"].add("frequency")
+        e["worst_q"] = min(e["worst_q"], r["q_fdr"])
+        e["hot" if r["z"] > 0 else "cold"] += 1
+
+    rd = families.get("runs_delay", {})
+    for r in rd.get("flagged", []):
+        e = agg[r["number"]]
+        e["families"].add("runs_delay")
+        e["worst_q"] = min(e["worst_q"], r["q_fdr"])
+        if r.get("lift", 0) > 1:
+            e["hot"] += 1
+        else:
+            e["cold"] += 1
+
+    for name in ("autocorrelation", "transition"):
+        fam = families.get(name, {})
+        q = fam.get("min_q") or 1.0
+        for key in fam.get("flag_keys", []):
+            a, b = key[0], key[1]
+            tgt = agg[b]
+            tgt["families"].add(name)
+            tgt["edges_in"] += 1
+            tgt["worst_q"] = min(tgt["worst_q"], q)
+            src = agg[a]
+            src["families"].add(name)
+            src["edges_out"] += 1
+            src["worst_q"] = min(src["worst_q"], q)
+
+    out = []
+    for num, e in agg.items():
+        direction = ("hot" if e["hot"] > e["cold"]
+                     else "cold" if e["cold"] else "neutral")
+        out.append({
+            "number": num,
+            "families": sorted(e["families"]),
+            "worst_q": round(e["worst_q"], 4),
+            "direction": direction,
+            "edges_in": e["edges_in"], "edges_out": e["edges_out"],
+        })
+    out.sort(key=lambda r: (r["worst_q"], -len(r["families"]), r["number"]))
+    return out[:limit]
+
+
+# ---------------------------------------------------------------------------
 # OOS replication + assembly
 # ---------------------------------------------------------------------------
 
@@ -889,6 +960,7 @@ def build_structure_map(
         "null_models": NULL_DOC,
         "verdict": verdict,
         "statuses": summary,
+        "attention_numbers": _attention_numbers(families),
         "families": families,
         "disclaimer": (
             "Une anomalie statistique n'est pas un avantage prédictif : "
