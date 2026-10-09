@@ -376,11 +376,16 @@ class ApiHandler(BaseHTTPRequestHandler):
 
     def _send(self, payload: Any, status: int = 200) -> None:
         body = json.dumps(payload, default=_default).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # Client disconnected mid-response (large research payloads,
+            # browser timeouts) — nothing to recover, keep logs clean.
+            self.close_connection = True
 
     def _lab_replay(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """Re-run every cohort picker against one past draw, strict walk-forward:
