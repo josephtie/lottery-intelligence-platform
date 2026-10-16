@@ -79,8 +79,11 @@ const groups: Group[] = [
     { to: '/prospective', label: 'Performance', emoji: '📈' },
   ]},
   { id: 'labo', title: 'Recherche', emoji: '🔬', items: [
-    { to: '/research', label: 'Analyses & modèles', emoji: '�' },
-    { to: '/findings', label: 'Résultats', emoji: '�' },
+    { to: '/research', label: 'Analyses & modèles', emoji: '🧬' },
+    { to: '/findings', label: 'Résultats', emoji: '📝' },
+  ]},
+  { id: 'edge', title: 'Edge Lab', emoji: '🤖', items: [
+    { to: '/agents', label: 'Parieurs', emoji: '🤖' },
   ]},
   { id: 'ops', title: 'Exploitation', emoji: '⚙️', items: [
     { to: '/ops', label: 'Jobs & sources', emoji: '⚙️' },
@@ -88,7 +91,7 @@ const groups: Group[] = [
 ]
 
 const openGroups = reactive<Record<string, boolean>>({
-  vue: true, preuves: true, labo: true, ops: true,
+  vue: true, preuves: true, labo: true, edge: true, ops: true,
 })
 function gid(id: string) { return id }
 

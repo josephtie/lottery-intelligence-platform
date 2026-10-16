@@ -9,6 +9,7 @@ import Findings from './views/Findings.vue'
 import Quality from './views/Quality.vue'
 import Statistics from './views/Statistics.vue'
 import Ops from './views/Ops.vue'
+import Agents from './views/Agents.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -24,6 +25,7 @@ const router = createRouter({
     { path: '/findings', name: 'Findings', component: Findings, meta: { title: 'Findings' } },
     { path: '/quality', name: 'Quality', component: Quality, meta: { title: 'Qualité' } },
     { path: '/ops', name: 'Ops', component: Ops, meta: { title: 'Opérations' } },
+    { path: '/agents', name: 'Agents', component: Agents, meta: { title: 'Parieurs' } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

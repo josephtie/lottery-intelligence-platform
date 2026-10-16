@@ -322,6 +322,51 @@ ROUTES: dict[str, str] = {
         JOIN research.prospective_cohorts c ON c.cohort_id = cv.cohort_id
         ORDER BY cv.created_at DESC
     """,
+    # AGENT SYSTEM ENDPOINTS
+    "/api/agents": """
+        SELECT * FROM edge_lab.agent_summary ORDER BY code
+    """,
+    "/api/agents/active": """
+        SELECT * FROM edge_lab.agent_summary WHERE status = 'ACTIVE' ORDER BY code
+    """,
+    "/api/agents/performance": """
+        SELECT * FROM edge_lab.agent_market_performance ORDER BY agent_code, draw_type
+    """,
+    "/api/agents/memory-summary": """
+        SELECT * FROM edge_lab.agent_memory_summary ORDER BY agent_code
+    """,
+    "/api/agents/decisions": """
+        SELECT ad.decision_id, a.code AS agent_code, dt.display_name AS draw_type,
+               ad.decision_type, ad.selected_numbers, ad.stake_amount,
+               ad.reasoning, ad.confidence_score, ad.created_at, ad.sealed_at,
+               do.outcome_type, do.net_result, do.settled_at
+        FROM edge_lab.agent_decisions ad
+        JOIN edge_lab.agents a ON a.agent_id = ad.agent_id
+        JOIN catalog.draw_types dt ON dt.draw_type_id = ad.draw_type_id
+        LEFT JOIN edge_lab.decision_outcomes do ON do.decision_id = ad.decision_id
+        ORDER BY ad.sealed_at DESC
+        LIMIT 100
+    """,
+    "/api/agents/reflections": """
+        SELECT ar.reflection_id, a.code AS agent_code, ar.reflection_type,
+               ar.content, ar.context, ar.action_taken, ar.next_steps, ar.created_at
+        FROM edge_lab.agent_reflections ar
+        JOIN edge_lab.agents a ON a.agent_id = ar.agent_id
+        ORDER BY ar.created_at DESC
+        LIMIT 50
+    """,
+    "/api/collective/knowledge": """
+        SELECT * FROM edge_lab.collective_summary ORDER BY knowledge_type, proof_level
+    """,
+    "/api/collective/knowledge-list": """
+        SELECT ck.knowledge_id, ck.code, ck.title, ck.knowledge_type, ck.proof_level,
+               a.code AS originating_agent, ck.validation_count, ck.rejection_count,
+               ck.created_at, ck.updated_at
+        FROM edge_lab.collective_knowledge ck
+        JOIN edge_lab.agents a ON a.agent_id = ck.originating_agent_id
+        ORDER BY ck.validation_count DESC, ck.updated_at DESC
+        LIMIT 50
+    """,
 }
 
 
