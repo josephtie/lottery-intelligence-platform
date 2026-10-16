@@ -1,0 +1,302 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop, feature/* ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_lottery_platform
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Apply migrations
+        env:
+          LOTTERY_DATABASE_HOST: localhost
+          LOTTERY_DATABASE_PORT: 5432
+          LOTTERY_DATABASE_NAME: test_lottery_platform
+          LOTTERY_DATABASE_USER: test_user
+          LOTTERY_DATABASE_PASSWORD: test_password
+        run: |
+          python -c "
+          import psycopg
+          from lottery_intelligence_platform.migrations import apply_migrations
+          from lottery_intelligence_platform.storage import s3_client_from_environment, raw_object_store_from_environment
+          
+          # Set minimal env for S3 (optional for tests)
+          import os
+          os.environ['LOTTERY_S3_BUCKET'] = 'test-bucket'
+          
+          dsn = 'host=localhost port=5432 dbname=test_lottery_platform user=test_user password=test_password'
+          conn = psycopg.connect(dsn, autocommit=True)
+          apply_migrations(conn)
+          conn.close()
+          print('Migrations applied successfully')
+          "
+
+      - name: Run unit tests
+        env:
+          LOTTERY_TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_lottery_platform
+        run: |
+          pytest tests/unit/ -v --tb=short
+
+      - name: Run integration tests
+        env:
+          LOTTERY_TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_lottery_platform
+        run: |
+          pytest tests/integration/ -v --tb=short
+
+      - name: Run agent system tests
+        env:
+          LOTTERY_TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_lottery_platform
+        run: |
+          pytest tests/integration/test_agent_system.py tests/integration/test_agent_anti_lookahead.py -v --tb=short
+
+      - name: Generate coverage report
+        env:
+          LOTTERY_TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_lottery_platform
+        run: |
+          pytest tests/ --cov=lottery_intelligence_platform --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: Run ruff (linter)
+        run: |
+          ruff check src/ tests/
+
+      - name: Run ruff (formatter check)
+        run: |
+          ruff format --check src/ tests/
+
+      - name: Run mypy (type checking)
+        run: |
+          mypy src/lottery_intelligence_platform/ --ignore-missing-imports || true
+
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run linter
+        working-directory: ./frontend
+        run: npm run lint || true
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_lottery_platform
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Apply all migrations
+        env:
+          LOTTERY_DATABASE_HOST: localhost
+          LOTTERY_DATABASE_PORT: 5432
+          LOTTERY_DATABASE_NAME: test_lottery_platform
+          LOTTERY_DATABASE_USER: test_user
+          LOTTERY_DATABASE_PASSWORD: test_password
+        run: |
+          python -c "
+          import psycopg
+          from lottery_intelligence_platform.migrations import apply_migrations
+          
+          dsn = 'host=localhost port=5432 dbname=test_lottery_platform user=test_user password=test_password'
+          conn = psycopg.connect(dsn, autocommit=True)
+          migrations = apply_migrations(conn)
+          print(f'Applied {len(migrations)} migrations: {migrations}')
+          conn.close()
+          "
+
+      - name: Verify agent system tables
+        env:
+          LOTTERY_DATABASE_HOST: localhost
+          LOTTERY_DATABASE_PORT: 5432
+          LOTTERY_DATABASE_NAME: test_lottery_platform
+          LOTTERY_DATABASE_USER: test_user
+          LOTTERY_DATABASE_PASSWORD: test_password
+        run: |
+          python -c "
+          import psycopg
+          
+          dsn = 'host=localhost port=5432 dbname=test_lottery_platform user=test_user password=test_password'
+          conn = psycopg.connect(dsn, autocommit=True)
+          
+          # Check edge_lab schema exists
+          schema = conn.execute(\"SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'edge_lab'\").fetchone()
+          assert schema is not None, 'edge_lab schema not found'
+          print('✓ edge_lab schema exists')
+          
+          # Check agent tables
+          tables = conn.execute(\"SELECT table_name FROM information_schema.tables WHERE table_schema = 'edge_lab'\").fetchall()
+          table_names = [t[0] for t in tables]
+          required_tables = ['agents', 'agent_capital', 'agent_decisions', 'decision_outcomes', 
+                          'memory_identity', 'memory_hypotheses', 'memory_experiments',
+                          'memory_successes', 'memory_failures', 'memory_changes',
+                          'memory_calibration', 'memory_risk', 'agent_reflections',
+                          'collective_knowledge', 'knowledge_adoption', 'agent_versions']
+          
+          for table in required_tables:
+              assert table in table_names, f'Required table {table} not found'
+              print(f'✓ Table {table} exists')
+          
+          # Check triggers
+          triggers = conn.execute(\"SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = 'edge_lab'\").fetchall()
+          trigger_count = len(triggers)
+          assert trigger_count > 0, 'No triggers found'
+          print(f'✓ {trigger_count} triggers exist')
+          
+          conn.close()
+          print('All agent system tables verified')
+          "
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
