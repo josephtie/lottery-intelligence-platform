@@ -108,6 +108,7 @@ class AgentDecision:
     sealed_at: datetime
     is_sealed: bool
     cutoff_respected: bool
+    formula_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +323,7 @@ def make_decision(
     expected_outcome: dict[str, Any] | None = None,
     risk_assessment: dict[str, Any] | None = None,
     cutoff_at: datetime | None = None,
+    formula_id: UUID | str | None = None,
 ) -> AgentDecision:
     """Make and seal a decision for an upcoming draw.
 
@@ -387,14 +389,14 @@ def make_decision(
                 selected_numbers, stake_amount, reasoning, confidence_score,
                 hypothesis_ids, model_version_ids, strategy_version_ids,
                 expected_outcome, risk_assessment, created_at, sealed_at,
-                is_sealed, cutoff_respected)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                is_sealed, cutoff_respected, formula_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 decision_id, agent_id, draw_id, draw_type_id, decision_type,
                 selected_numbers, stake_amount, reasoning, confidence_score,
                 hypothesis_ids, model_version_ids, strategy_version_ids,
                 Jsonb(expected_outcome), Jsonb(risk_assessment), now, now, True,
-                cutoff_at is None or datetime.now() <= cutoff_at,
+                cutoff_at is None or datetime.now() <= cutoff_at, formula_id,
             ),
         )
 
@@ -428,6 +430,7 @@ def make_decision(
         sealed_at=now,
         is_sealed=True,
         cutoff_respected=cutoff_at is None or datetime.now() <= cutoff_at,
+        formula_id=UUID(str(formula_id)) if formula_id else None,
     )
 
 
