@@ -52,7 +52,7 @@ services:
       LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY:?Set LOTTERY_S3_SECRET_KEY in .env}
       LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN:-}
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8091:8090"
     depends_on:
       postgres:
         condition: service_healthy
