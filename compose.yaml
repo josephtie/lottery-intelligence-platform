@@ -41,7 +41,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "-m", "lottery_intelligence_platform.api", "--port", "8091"]
+    command: ["python", "-m", "lottery_intelligence_platform.api", "--host", "0.0.0.0", "--port", "8091"]
     environment:
       LOTTERY_DATABASE_HOST: postgres
       LOTTERY_DATABASE_PORT: 5432
@@ -55,7 +55,7 @@ services:
       LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY:?Set LOTTERY_S3_SECRET_KEY in .env}
       LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN:-}
     ports:
-      - "127.0.0.1:8091:8090"
+      - "127.0.0.1:8091:8091"
     depends_on:
       postgres:
         condition: service_healthy
