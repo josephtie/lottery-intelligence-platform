@@ -1,4 +1,24 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${LOTTERY_DATABASE_NAME:-lottery_platform}
+      POSTGRES_USER: ${LOTTERY_DATABASE_USER:-directus}
+      POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5432}:5432"
+    volumes:
+      - lottery-db:/var/lib/postgresql/data
+      - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LOTTERY_DATABASE_USER:-directus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   raw-storage:
     image: pgsty/minio:RELEASE.2026-06-18T00-00-00Z
     command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
@@ -14,5 +34,34 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "lottery_intelligence_platform.api", "--port", "8090"]
+    environment:
+      LOTTERY_DATABASE_HOST: postgres
+      LOTTERY_DATABASE_PORT: 5432
+      LOTTERY_DATABASE_NAME: ${LOTTERY_DATABASE_NAME:-lottery_platform}
+      LOTTERY_DATABASE_USER: ${LOTTERY_DATABASE_USER:-directus}
+      LOTTERY_DATABASE_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
+      LOTTERY_S3_ENDPOINT_URL: http://raw-storage:9000
+      LOTTERY_S3_BUCKET: ${LOTTERY_S3_BUCKET:-lottery-raw}
+      LOTTERY_S3_REGION: ${LOTTERY_S3_REGION:-us-east-1}
+      LOTTERY_S3_ACCESS_KEY: ${LOTTERY_S3_ACCESS_KEY:?Set LOTTERY_S3_ACCESS_KEY in .env}
+      LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY:?Set LOTTERY_S3_SECRET_KEY in .env}
+      LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN:-}
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      raw-storage:
+        condition: service_started
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
+  lottery-db:
   lottery-raw-data:
