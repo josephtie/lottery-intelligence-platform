@@ -2,19 +2,22 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: ${LOTTERY_DATABASE_NAME:-lottery_platform}
-      POSTGRES_USER: ${LOTTERY_DATABASE_USER:-directus}
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
+      LOTTERY_DATABASE_NAME: ${LOTTERY_DATABASE_NAME:-lottery_platform}
+      LOTTERY_DATABASE_USER: ${LOTTERY_DATABASE_USER:-directus}
     ports:
       - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5430}:5432"
     volumes:
       - lottery-db:/var/lib/postgresql/data
-      - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d:ro
+      - ./infrastructure/postgres/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+      - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d/migrations:ro
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${LOTTERY_DATABASE_USER:-directus}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
