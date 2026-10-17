@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${LOTTERY_DATABASE_USER:-directus}
       POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
     ports:
-      - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5432}:5432"
+      - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5430}:5432"
     volumes:
       - lottery-db:/var/lib/postgresql/data
       - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d:ro
