@@ -26,8 +26,8 @@ services:
       MINIO_ROOT_USER: ${LOTTERY_S3_ACCESS_KEY:?Set LOTTERY_S3_ACCESS_KEY in .env}
       MINIO_ROOT_PASSWORD: ${LOTTERY_S3_SECRET_KEY:?Set LOTTERY_S3_SECRET_KEY in .env}
     ports:
-      - "127.0.0.1:${MINIO_API_PORT:-19000}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-19002}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-19003}:9001"
     volumes:
       - lottery-raw-data:/data
     restart: unless-stopped
