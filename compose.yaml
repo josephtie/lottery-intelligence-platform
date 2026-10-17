@@ -41,7 +41,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "-m", "lottery_intelligence_platform.api", "--port", "8090"]
+    command: ["python", "-m", "lottery_intelligence_platform.api", "--port", "8091"]
     environment:
       LOTTERY_DATABASE_HOST: postgres
       LOTTERY_DATABASE_PORT: 5432
