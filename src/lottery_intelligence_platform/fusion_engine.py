@@ -166,3 +166,97 @@ def evaluate_walkforward(
         "random_reference": summarize(random_ref),
         "per_model": {code: summarize(h) for code, h in per_model.items()},
     }
+
+
+# ---------------------------------------------------------------------------
+# Combinatorial search + complementarity (mission §5)
+# ---------------------------------------------------------------------------
+
+def generate_n_combination(
+    picks: dict[str, list[int]], history, n: int
+) -> list[int]:
+    """A fused n-number combination (n = 2..5) by majority vote, frequency-tied."""
+    counts: Counter = Counter()
+    for p in picks.values():
+        counts.update(p)
+    freq = _frequency_rank(history)
+    ranked = sorted(counts, key=lambda x: (-counts[x], -freq.get(x, 0), x))
+    return ranked[:n]
+
+
+def pairwise_jaccard(picks: dict[str, list[int]]) -> float:
+    """Mean pairwise Jaccard of models' top-k — 0.0 = fully complementary,
+    1.0 = all identical. Never a probability of winning."""
+    keys = list(picks)
+    if len(keys) < 2:
+        return 1.0
+    total = cnt = 0.0
+    for a in range(len(keys)):
+        for b in range(a + 1, len(keys)):
+            sa, sb = set(picks[keys[a]]), set(picks[keys[b]])
+            total += len(sa & sb) / len(sa | sb)
+            cnt += 1
+    return total / cnt
+
+
+def complementary_pairs(
+    picks: dict[str, list[int]], threshold: float = 0.2
+) -> list[tuple[str, str, float]]:
+    """Model pairs whose top-k barely overlap (complementary — candidates for
+    fusion: one brings a number the other misses)."""
+    keys = list(picks)
+    out: list[tuple[str, str, float]] = []
+    for a in range(len(keys)):
+        for b in range(a + 1, len(keys)):
+            sa, sb = set(picks[keys[a]]), set(picks[keys[b]])
+            j = len(sa & sb) / len(sa | sb) if (sa | sb) else 1.0
+            if j <= threshold:
+                out.append((keys[a], keys[b], round(j, 3)))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Official-formula settlement (mission §3, betting_formulas.py)
+# ---------------------------------------------------------------------------
+
+def evaluate_formula_walkforward(
+    history: Sequence[Sequence[int]],
+    *,
+    formula_code: str,
+    method: str = "majority",
+    k: int = 5,
+    start: int = 20,
+    stake: str = "100",
+) -> dict:
+    """Walk-forward fusion settled by an official betting formula.
+
+    Each draw: fuse the models into a k-number combination using ONLY the
+    past, then settle it against the official payout of ``formula_code``
+    (e.g. 3N, 4N, 5N, CHANCE_5_PLUS, PERM_2). Returns net result and ROI.
+    """
+    from decimal import Decimal
+    from lottery_intelligence_platform.betting_formulas import calculate_potential_gain
+
+    stake_dec = Decimal(str(stake))
+    hits: list[int] = []
+    nets: list[float] = []
+    for i in range(start, len(history)):
+        past = history[:i]
+        winning = list(history[i])
+        picks = model_picks(past, k)
+        combo = generate_combinations(picks, past, k, (method,))[method]
+        hits.append(hit_count(combo, winning))
+        g = calculate_potential_gain(formula_code, combo, winning, stake_dec)
+        nets.append(float(g["net_profit"]))
+    total_stake = float(stake_dec) * len(nets)
+    total_net = sum(nets)
+    return {
+        "formula": formula_code,
+        "method": method,
+        "n": len(nets),
+        "mean_hits": round(sum(hits) / len(hits), 4) if hits else 0.0,
+        "p_ge3": round(sum(1 for h in hits if h >= 3) / len(hits), 4) if hits else 0.0,
+        "total_stake": round(total_stake, 2),
+        "total_net": round(total_net, 2),
+        "roi": round(total_net / total_stake, 4) if total_stake else 0.0,
+    }
