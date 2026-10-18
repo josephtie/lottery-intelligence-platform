@@ -1084,6 +1084,64 @@ class ApiHandler(BaseHTTPRequestHandler):
         else:
             self._send_file(dist / "index.html")
 
+    def _fusion_agents(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Decisions of the virtual fusion betting agents for one draw type.
+
+        Strict walk-forward: each agent only sees the settled history already
+        present, never the future. Read-only — nothing is persisted or sealed.
+        """
+        from collections import OrderedDict
+        import random as _random
+
+        from lottery_intelligence_platform import fusion_agents as fa
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    "SELECT draw_type_id, display_name FROM catalog.draw_types "
+                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    "SELECT dt.draw_type_id, dt.display_name FROM catalog.draw_types dt "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = dt.draw_type_id) DESC LIMIT 1",
+                ).fetchone()
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt
+            rows = conn.execute(
+                """SELECT d.scheduled_date, d.scheduled_sequence, n.number
+                   FROM core.draws d
+                   JOIN core.draw_versions v
+                     ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n
+                     ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                   WHERE d.draw_type_id = %s AND d.status = 'SETTLED'
+                   ORDER BY d.scheduled_date, d.scheduled_sequence, n.position""",
+                (draw_type_id,),
+            ).fetchall()
+        draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
+        for d, seq, num in rows:
+            draws.setdefault((d, seq), []).append(num)
+        history = [sorted(nums) for nums in draws.values()]
+
+        rng = _random.Random(len(history))
+        decisions = []
+        for profile in fa.FUSION_AGENT_PROFILES:
+            d = fa.decide(profile, history, rng, k=5)
+            decisions.append({
+                "code": d["code"],
+                "display_name": d["display_name"],
+                "strategy": d["strategy"],
+                "selected_numbers": d["selected_numbers"],
+                "stake_amount": str(d["stake_amount"]),
+                "confidence_score": d["confidence_score"],
+                "reasoning": d["reasoning"],
+            })
+        return {"draw_type": display_name, "n_draws": len(history), "agents": decisions}
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if not url.path.startswith("/api"):
@@ -1196,6 +1254,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/turbo2-history":
                 self._send(self._lab_turbo2_history(parse_qs(url.query)))
+                return
+            if url.path == "/api/fusion/agents":
+                self._send(self._fusion_agents(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

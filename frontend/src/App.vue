@@ -84,6 +84,7 @@ const groups: Group[] = [
   ]},
   { id: 'edge', title: 'Edge Lab', emoji: '🤖', items: [
     { to: '/agents', label: 'Parieurs', emoji: '🤖' },
+    { to: '/fusion-agents', label: 'Parieurs — Fusion', emoji: '🧬' },
   ]},
   { id: 'ops', title: 'Exploitation', emoji: '⚙️', items: [
     { to: '/ops', label: 'Jobs & sources', emoji: '⚙️' },
