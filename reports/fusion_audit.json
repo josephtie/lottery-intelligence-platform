@@ -1,0 +1,3642 @@
+{
+  "baselines": {
+    "E_hits_null": 0.2777777777777778,
+    "P_ge3": 0.000822,
+    "P_ge3_per_1000_draws": 0.822,
+    "note": "5 picks vs 5-number draw out of 90, hypergeometric"
+  },
+  "n_random": 200,
+  "games": [
+    {
+      "game": "digital_21h",
+      "n_draws_total": 1675,
+      "n_evaluated": 500,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 500,
+          "mean_hits": 0.352,
+          "lift_vs_random": 0.0742,
+          "p": 0.005,
+          "p_ge3_obs": 0.006,
+          "half": [
+            0.372,
+            0.332
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "fusion:borda": {
+          "n": 500,
+          "mean_hits": 0.314,
+          "lift_vs_random": 0.0362,
+          "p": 0.0896,
+          "p_ge3_obs": 0.004,
+          "half": [
+            0.32,
+            0.308
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "fusion:union": {
+          "n": 500,
+          "mean_hits": 0.348,
+          "lift_vs_random": 0.0702,
+          "p": 0.005,
+          "p_ge3_obs": 0.006,
+          "half": [
+            0.368,
+            0.328
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:hot_frequency_v1": {
+          "n": 500,
+          "mean_hits": 0.296,
+          "lift_vs_random": 0.0182,
+          "p": 0.1791,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.336,
+            0.256
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 500,
+          "mean_hits": 0.242,
+          "lift_vs_random": -0.0358,
+          "p": 0.9502,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.244,
+            0.24
+          ],
+          "q": 0.9835,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:frequency_delay_v1": {
+          "n": 500,
+          "mean_hits": 0.252,
+          "lift_vs_random": -0.0258,
+          "p": 0.8856,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.24,
+            0.264
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:pair_frequency_v1": {
+          "n": 500,
+          "mean_hits": 0.282,
+          "lift_vs_random": 0.0042,
+          "p": 0.3881,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.284,
+            0.28
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 500,
+          "mean_hits": 0.348,
+          "lift_vs_random": 0.0702,
+          "p": 0.005,
+          "p_ge3_obs": 0.006,
+          "half": [
+            0.356,
+            0.34
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:bayesian_v1": {
+          "n": 500,
+          "mean_hits": 0.29,
+          "lift_vs_random": 0.0122,
+          "p": 0.2637,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.276,
+            0.304
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 500,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.199,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.316,
+            0.272
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:top_k_frequency": {
+          "n": 500,
+          "mean_hits": 0.38,
+          "lift_vs_random": 0.1022,
+          "p": 0.005,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.408,
+            0.352
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:rolling_frequency": {
+          "n": 500,
+          "mean_hits": 0.322,
+          "lift_vs_random": 0.0442,
+          "p": 0.0597,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.308,
+            0.336
+          ],
+          "q": 0.5149,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 500,
+          "mean_hits": 0.38,
+          "lift_vs_random": 0.1022,
+          "p": 0.005,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.408,
+            0.352
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:ensemble_v1": {
+          "n": 500,
+          "mean_hits": 0.268,
+          "lift_vs_random": -0.0098,
+          "p": 0.6567,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.248,
+            0.288
+          ],
+          "q": 0.9247,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_numbers": {
+          "n": 500,
+          "mean_hits": 0.284,
+          "lift_vs_random": 0.0062,
+          "p": 0.3532,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.28,
+            0.288
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:image_numbers": {
+          "n": 500,
+          "mean_hits": 0.272,
+          "lift_vs_random": -0.0058,
+          "p": 0.5771,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.256,
+            0.288
+          ],
+          "q": 0.8982,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image": {
+          "n": 500,
+          "mean_hits": 0.286,
+          "lift_vs_random": 0.0082,
+          "p": 0.3134,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.268,
+            0.304
+          ],
+          "q": 0.7129,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 500,
+          "mean_hits": 0.264,
+          "lift_vs_random": -0.0138,
+          "p": 0.7214,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.276,
+            0.252
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 500,
+          "mean_hits": 0.36,
+          "lift_vs_random": 0.0822,
+          "p": 0.005,
+          "p_ge3_obs": 0.006,
+          "half": [
+            0.392,
+            0.328
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:meta_consensus_family": {
+          "n": 500,
+          "mean_hits": 0.34,
+          "lift_vs_random": 0.0622,
+          "p": 0.01,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.364,
+            0.316
+          ],
+          "q": 0.1035,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 500,
+          "mean_hits": 0.256,
+          "lift_vs_random": -0.0218,
+          "p": 0.8408,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.264,
+            0.248
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 500,
+          "mean_hits": 2.236,
+          "lift_vs_random": 1.9582,
+          "p": 0.005,
+          "p_ge3_obs": 0.376,
+          "half": [
+            2.284,
+            2.188
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 500,
+          "mean_hits": 0.352,
+          "lift_vs_random": 0.0742,
+          "p": 0.005,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.4,
+            0.304
+          ],
+          "switches": [
+            [
+              "majority",
+              "model:cold_delay_v1",
+              0.45
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:meta_consensus_family",
+              0.075
+            ],
+            [
+              "model:meta_consensus_family",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "fusion:majority",
+              0.05
+            ],
+            [
+              "fusion:majority",
+              "model:calling_numbers",
+              0.075
+            ],
+            [
+              "model:calling_numbers",
+              "model:calling_image_position",
+              0.075
+            ],
+            [
+              "model:calling_image_position",
+              "model:image_numbers",
+              0.075
+            ],
+            [
+              "model:image_numbers",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_numbers",
+              0.125
+            ],
+            [
+              "model:calling_numbers",
+              "fusion:majority",
+              0.075
+            ],
+            [
+              "fusion:majority",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "fusion:majority",
+              0.075
+            ],
+            [
+              "fusion:majority",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:rolling_frequency",
+              0.075
+            ],
+            [
+              "model:rolling_frequency",
+              "model:pair_frequency_v1",
+              0.1
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:bayesian_v1",
+              0.075
+            ]
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        }
+      },
+      "random_mean": 0.2763,
+      "random_sd": 0.0229,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "digital_23h",
+      "n_draws_total": 1623,
+      "n_evaluated": 500,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 500,
+          "mean_hits": 0.282,
+          "lift_vs_random": 0.0042,
+          "p": 0.4627,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.248,
+            0.316
+          ],
+          "q": 0.8186,
+          "verdict": "compatible hasard"
+        },
+        "fusion:borda": {
+          "n": 500,
+          "mean_hits": 0.27,
+          "lift_vs_random": -0.0078,
+          "p": 0.6368,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.248,
+            0.292
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:union": {
+          "n": 500,
+          "mean_hits": 0.284,
+          "lift_vs_random": 0.0062,
+          "p": 0.4229,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.24,
+            0.328
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:hot_frequency_v1": {
+          "n": 500,
+          "mean_hits": 0.286,
+          "lift_vs_random": 0.0082,
+          "p": 0.3781,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.28,
+            0.292
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 500,
+          "mean_hits": 0.288,
+          "lift_vs_random": 0.0102,
+          "p": 0.3632,
+          "p_ge3_obs": 0.004,
+          "half": [
+            0.296,
+            0.28
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:frequency_delay_v1": {
+          "n": 500,
+          "mean_hits": 0.308,
+          "lift_vs_random": 0.0302,
+          "p": 0.1343,
+          "p_ge3_obs": 0.004,
+          "half": [
+            0.276,
+            0.34
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:pair_frequency_v1": {
+          "n": 500,
+          "mean_hits": 0.296,
+          "lift_vs_random": 0.0182,
+          "p": 0.2587,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.304,
+            0.288
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 500,
+          "mean_hits": 0.312,
+          "lift_vs_random": 0.0342,
+          "p": 0.0846,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.296,
+            0.328
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_v1": {
+          "n": 500,
+          "mean_hits": 0.302,
+          "lift_vs_random": 0.0242,
+          "p": 0.194,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.288,
+            0.316
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 500,
+          "mean_hits": 0.268,
+          "lift_vs_random": -0.0098,
+          "p": 0.6716,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.28,
+            0.256
+          ],
+          "q": 0.9393,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:top_k_frequency": {
+          "n": 500,
+          "mean_hits": 0.336,
+          "lift_vs_random": 0.0582,
+          "p": 0.005,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.308,
+            0.364
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:rolling_frequency": {
+          "n": 500,
+          "mean_hits": 0.296,
+          "lift_vs_random": 0.0182,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.264,
+            0.328
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 500,
+          "mean_hits": 0.336,
+          "lift_vs_random": 0.0582,
+          "p": 0.005,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.308,
+            0.364
+          ],
+          "q": 0.0575,
+          "verdict": "AVANTAGE \u00c0 CONFIRMER"
+        },
+        "model:ensemble_v1": {
+          "n": 500,
+          "mean_hits": 0.29,
+          "lift_vs_random": 0.0122,
+          "p": 0.3284,
+          "p_ge3_obs": 0.004,
+          "half": [
+            0.264,
+            0.316
+          ],
+          "q": 0.7389,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_numbers": {
+          "n": 500,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.2836,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.268,
+            0.32
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:image_numbers": {
+          "n": 500,
+          "mean_hits": 0.308,
+          "lift_vs_random": 0.0302,
+          "p": 0.1343,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.284,
+            0.332
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image": {
+          "n": 500,
+          "mean_hits": 0.264,
+          "lift_vs_random": -0.0138,
+          "p": 0.7463,
+          "p_ge3_obs": 0.002,
+          "half": [
+            0.272,
+            0.256
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image_position": {
+          "n": 500,
+          "mean_hits": 0.254,
+          "lift_vs_random": -0.0238,
+          "p": 0.8607,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.28,
+            0.228
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 500,
+          "mean_hits": 0.286,
+          "lift_vs_random": 0.0082,
+          "p": 0.3781,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.244,
+            0.328
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_family": {
+          "n": 500,
+          "mean_hits": 0.278,
+          "lift_vs_random": 0.0002,
+          "p": 0.4876,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.252,
+            0.304
+          ],
+          "q": 0.8496,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 500,
+          "mean_hits": 0.27,
+          "lift_vs_random": -0.0078,
+          "p": 0.6368,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.276,
+            0.264
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 500,
+          "mean_hits": 2.334,
+          "lift_vs_random": 2.0562,
+          "p": 0.005,
+          "p_ge3_obs": 0.44,
+          "half": [
+            2.328,
+            2.34
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 500,
+          "mean_hits": 0.276,
+          "lift_vs_random": -0.0018,
+          "p": 0.5025,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.26,
+            0.292
+          ],
+          "switches": [
+            [
+              "majority",
+              "model:calling_numbers",
+              0.6
+            ],
+            [
+              "model:calling_numbers",
+              "model:bayesian_v1",
+              0.0625
+            ],
+            [
+              "model:bayesian_v1",
+              "model:rolling_frequency",
+              0.075
+            ],
+            [
+              "model:rolling_frequency",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_image_position",
+              0.05
+            ],
+            [
+              "model:calling_image_position",
+              "model:random",
+              0.075
+            ],
+            [
+              "model:random",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "model:rolling_frequency",
+              0.05
+            ],
+            [
+              "model:rolling_frequency",
+              "model:cold_delay_v1",
+              0.075
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:bayesian_v1",
+              0.05
+            ],
+            [
+              "model:bayesian_v1",
+              "model:monte_carlo_v1",
+              0.05
+            ],
+            [
+              "model:monte_carlo_v1",
+              "fusion:borda",
+              0.1
+            ],
+            [
+              "fusion:borda",
+              "model:calling_numbers",
+              0.075
+            ],
+            [
+              "model:calling_numbers",
+              "model:frequency_delay_v1",
+              0.075
+            ],
+            [
+              "model:frequency_delay_v1",
+              "model:bayesian_v1",
+              0.05
+            ],
+            [
+              "model:bayesian_v1",
+              "model:frequency_delay_v1",
+              0.05
+            ],
+            [
+              "model:frequency_delay_v1",
+              "model:monte_carlo_v1",
+              0.05
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:cold_delay_v1",
+              0.05
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:monte_carlo_v1",
+              0.05
+            ],
+            [
+              "model:monte_carlo_v1",
+              "fusion:union",
+              0.075
+            ],
+            [
+              "fusion:union",
+              "model:image_numbers",
+              0.1
+            ],
+            [
+              "model:image_numbers",
+              "model:random",
+              0.1
+            ],
+            [
+              "model:random",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "model:rolling_frequency",
+              0.075
+            ]
+          ],
+          "q": 0.8554,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2784,
+      "random_sd": 0.023,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "digital_reveil_8h",
+      "n_draws_total": 490,
+      "n_evaluated": 450,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 450,
+          "mean_hits": 0.2956,
+          "lift_vs_random": 0.0178,
+          "p": 0.2338,
+          "p_ge3_obs": 0.0044,
+          "half": [
+            0.2978,
+            0.2933
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "fusion:borda": {
+          "n": 450,
+          "mean_hits": 0.2689,
+          "lift_vs_random": -0.0089,
+          "p": 0.6517,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2622,
+            0.2756
+          ],
+          "q": 0.9247,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:union": {
+          "n": 450,
+          "mean_hits": 0.3,
+          "lift_vs_random": 0.0222,
+          "p": 0.1841,
+          "p_ge3_obs": 0.0044,
+          "half": [
+            0.2978,
+            0.3022
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:hot_frequency_v1": {
+          "n": 450,
+          "mean_hits": 0.3178,
+          "lift_vs_random": 0.04,
+          "p": 0.0547,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.32,
+            0.3156
+          ],
+          "q": 0.4923,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 450,
+          "mean_hits": 0.2511,
+          "lift_vs_random": -0.0267,
+          "p": 0.8856,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2622,
+            0.24
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:frequency_delay_v1": {
+          "n": 450,
+          "mean_hits": 0.2578,
+          "lift_vs_random": -0.02,
+          "p": 0.8109,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.28,
+            0.2356
+          ],
+          "q": 0.9703,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:pair_frequency_v1": {
+          "n": 450,
+          "mean_hits": 0.2444,
+          "lift_vs_random": -0.0333,
+          "p": 0.9403,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2267,
+            0.2622
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:balanced_v1": {
+          "n": 450,
+          "mean_hits": 0.2956,
+          "lift_vs_random": 0.0178,
+          "p": 0.2338,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3111,
+            0.28
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_v1": {
+          "n": 450,
+          "mean_hits": 0.3044,
+          "lift_vs_random": 0.0267,
+          "p": 0.1294,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3422,
+            0.2667
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 450,
+          "mean_hits": 0.2956,
+          "lift_vs_random": 0.0178,
+          "p": 0.2338,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.28,
+            0.3111
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:top_k_frequency": {
+          "n": 450,
+          "mean_hits": 0.2933,
+          "lift_vs_random": 0.0156,
+          "p": 0.2736,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.3022,
+            0.2844
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:rolling_frequency": {
+          "n": 450,
+          "mean_hits": 0.2756,
+          "lift_vs_random": -0.0022,
+          "p": 0.5224,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2978,
+            0.2533
+          ],
+          "q": 0.8651,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 450,
+          "mean_hits": 0.2933,
+          "lift_vs_random": 0.0156,
+          "p": 0.2736,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.3022,
+            0.2844
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:ensemble_v1": {
+          "n": 450,
+          "mean_hits": 0.2533,
+          "lift_vs_random": -0.0244,
+          "p": 0.8607,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2489,
+            0.2578
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_numbers": {
+          "n": 450,
+          "mean_hits": 0.2644,
+          "lift_vs_random": -0.0133,
+          "p": 0.7413,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2622,
+            0.2667
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:image_numbers": {
+          "n": 450,
+          "mean_hits": 0.2644,
+          "lift_vs_random": -0.0133,
+          "p": 0.7413,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2756,
+            0.2533
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image": {
+          "n": 450,
+          "mean_hits": 0.2978,
+          "lift_vs_random": 0.02,
+          "p": 0.199,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2933,
+            0.3022
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 450,
+          "mean_hits": 0.28,
+          "lift_vs_random": 0.0022,
+          "p": 0.4577,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.28,
+            0.28
+          ],
+          "q": 0.8168,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_count": {
+          "n": 450,
+          "mean_hits": 0.3,
+          "lift_vs_random": 0.0222,
+          "p": 0.1841,
+          "p_ge3_obs": 0.0044,
+          "half": [
+            0.2889,
+            0.3111
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_family": {
+          "n": 450,
+          "mean_hits": 0.2933,
+          "lift_vs_random": 0.0156,
+          "p": 0.2736,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.3022,
+            0.2844
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 450,
+          "mean_hits": 0.2644,
+          "lift_vs_random": -0.0133,
+          "p": 0.7413,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.28,
+            0.2489
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 450,
+          "mean_hits": 2.1444,
+          "lift_vs_random": 1.8667,
+          "p": 0.005,
+          "p_ge3_obs": 0.3711,
+          "half": [
+            2.1378,
+            2.1511
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 450,
+          "mean_hits": 0.2578,
+          "lift_vs_random": -0.02,
+          "p": 0.8109,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2489,
+            0.2667
+          ],
+          "switches": [
+            [
+              "majority",
+              "fusion:borda",
+              0.5
+            ],
+            [
+              "fusion:borda",
+              "model:calling_image_position",
+              0.0769
+            ],
+            [
+              "model:calling_image_position",
+              "model:monte_carlo_v1",
+              0.1
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:cold_delay_v1",
+              0.1
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:monte_carlo_v1",
+              0.1
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:meta_consensus_count",
+              0.075
+            ],
+            [
+              "model:meta_consensus_count",
+              "model:calling_image_position",
+              0.05
+            ],
+            [
+              "model:calling_image_position",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_image",
+              0.05
+            ],
+            [
+              "model:calling_image",
+              "model:monte_carlo_v1",
+              0.075
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "fusion:majority",
+              0.05
+            ],
+            [
+              "fusion:majority",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:hot_frequency_v1",
+              0.075
+            ]
+          ],
+          "q": 0.9703,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2774,
+      "random_sd": 0.0235,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "digital_22h",
+      "n_draws_total": 489,
+      "n_evaluated": 449,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 449,
+          "mean_hits": 0.2851,
+          "lift_vs_random": 0.0073,
+          "p": 0.4129,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2946,
+            0.2756
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "fusion:borda": {
+          "n": 449,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2857,
+            0.3022
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "fusion:union": {
+          "n": 449,
+          "mean_hits": 0.2851,
+          "lift_vs_random": 0.0073,
+          "p": 0.4129,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2902,
+            0.28
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:hot_frequency_v1": {
+          "n": 449,
+          "mean_hits": 0.2561,
+          "lift_vs_random": -0.0217,
+          "p": 0.8806,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.25,
+            0.2622
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:cold_delay_v1": {
+          "n": 449,
+          "mean_hits": 0.2851,
+          "lift_vs_random": 0.0073,
+          "p": 0.4129,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2455,
+            0.3244
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:frequency_delay_v1": {
+          "n": 449,
+          "mean_hits": 0.2873,
+          "lift_vs_random": 0.0095,
+          "p": 0.393,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.308,
+            0.2667
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:pair_frequency_v1": {
+          "n": 449,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.308,
+            0.28
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 449,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2723,
+            0.3156
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_v1": {
+          "n": 449,
+          "mean_hits": 0.2695,
+          "lift_vs_random": -0.0083,
+          "p": 0.7065,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3125,
+            0.2267
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:monte_carlo_v1": {
+          "n": 449,
+          "mean_hits": 0.245,
+          "lift_vs_random": -0.0328,
+          "p": 0.9353,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2143,
+            0.2756
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:top_k_frequency": {
+          "n": 449,
+          "mean_hits": 0.3118,
+          "lift_vs_random": 0.034,
+          "p": 0.0746,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.308,
+            0.3156
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:rolling_frequency": {
+          "n": 449,
+          "mean_hits": 0.3296,
+          "lift_vs_random": 0.0518,
+          "p": 0.0249,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.3214,
+            0.3378
+          ],
+          "q": 0.2454,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 449,
+          "mean_hits": 0.3118,
+          "lift_vs_random": 0.034,
+          "p": 0.0746,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.308,
+            0.3156
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:ensemble_v1": {
+          "n": 449,
+          "mean_hits": 0.294,
+          "lift_vs_random": 0.0162,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2857,
+            0.3022
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_numbers": {
+          "n": 449,
+          "mean_hits": 0.265,
+          "lift_vs_random": -0.0127,
+          "p": 0.7761,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2768,
+            0.2533
+          ],
+          "q": 0.945,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:image_numbers": {
+          "n": 449,
+          "mean_hits": 0.2428,
+          "lift_vs_random": -0.035,
+          "p": 0.9403,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2545,
+            0.2311
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image": {
+          "n": 449,
+          "mean_hits": 0.265,
+          "lift_vs_random": -0.0127,
+          "p": 0.7761,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2589,
+            0.2711
+          ],
+          "q": 0.945,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image_position": {
+          "n": 449,
+          "mean_hits": 0.2673,
+          "lift_vs_random": -0.0105,
+          "p": 0.7512,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2277,
+            0.3067
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 449,
+          "mean_hits": 0.2962,
+          "lift_vs_random": 0.0184,
+          "p": 0.2189,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2991,
+            0.2933
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_family": {
+          "n": 449,
+          "mean_hits": 0.2851,
+          "lift_vs_random": 0.0073,
+          "p": 0.4129,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2768,
+            0.2933
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 449,
+          "mean_hits": 0.2717,
+          "lift_vs_random": -0.0061,
+          "p": 0.6866,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.25,
+            0.2933
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 449,
+          "mean_hits": 2.1537,
+          "lift_vs_random": 1.8759,
+          "p": 0.005,
+          "p_ge3_obs": 0.3786,
+          "half": [
+            2.0268,
+            2.28
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 449,
+          "mean_hits": 0.2762,
+          "lift_vs_random": -0.0016,
+          "p": 0.5871,
+          "p_ge3_obs": 0.0022,
+          "half": [
+            0.2812,
+            0.2711
+          ],
+          "switches": [
+            [
+              "majority",
+              "model:top_k_frequency",
+              0.5
+            ],
+            [
+              "model:top_k_frequency",
+              "model:calling_image_position",
+              0.075
+            ],
+            [
+              "model:calling_image_position",
+              "model:bayesian_v1",
+              0.05
+            ],
+            [
+              "model:bayesian_v1",
+              "model:calling_image",
+              0.05
+            ],
+            [
+              "model:calling_image",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:frequency_delay_v1",
+              0.075
+            ],
+            [
+              "model:frequency_delay_v1",
+              "model:meta_consensus_count",
+              0.075
+            ],
+            [
+              "model:meta_consensus_count",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:rolling_frequency",
+              0.075
+            ],
+            [
+              "model:rolling_frequency",
+              "model:image_numbers",
+              0.075
+            ],
+            [
+              "model:image_numbers",
+              "model:cold_delay_v1",
+              0.075
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:calling_image",
+              0.05
+            ],
+            [
+              "model:calling_image",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "fusion:borda",
+              0.075
+            ],
+            [
+              "fusion:borda",
+              "model:cold_delay_v1",
+              0.05
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:rolling_frequency",
+              0.075
+            ],
+            [
+              "model:rolling_frequency",
+              "model:random",
+              0.075
+            ],
+            [
+              "model:random",
+              "model:calling_image_position",
+              0.075
+            ]
+          ],
+          "q": 0.9002,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2798,
+      "random_sd": 0.0214,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "benediction",
+      "n_draws_total": 312,
+      "n_evaluated": 272,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 272,
+          "mean_hits": 0.3088,
+          "lift_vs_random": 0.031,
+          "p": 0.1692,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3382,
+            0.2794
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "fusion:borda": {
+          "n": 272,
+          "mean_hits": 0.3199,
+          "lift_vs_random": 0.0421,
+          "p": 0.0896,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3676,
+            0.2721
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "fusion:union": {
+          "n": 272,
+          "mean_hits": 0.3015,
+          "lift_vs_random": 0.0237,
+          "p": 0.2289,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3309,
+            0.2721
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:hot_frequency_v1": {
+          "n": 272,
+          "mean_hits": 0.3125,
+          "lift_vs_random": 0.0347,
+          "p": 0.1244,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3824,
+            0.2426
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 272,
+          "mean_hits": 0.3346,
+          "lift_vs_random": 0.0568,
+          "p": 0.01,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3162,
+            0.3529
+          ],
+          "q": 0.1035,
+          "verdict": "compatible hasard"
+        },
+        "model:frequency_delay_v1": {
+          "n": 272,
+          "mean_hits": 0.3199,
+          "lift_vs_random": 0.0421,
+          "p": 0.0896,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3456,
+            0.2941
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:pair_frequency_v1": {
+          "n": 272,
+          "mean_hits": 0.2868,
+          "lift_vs_random": 0.009,
+          "p": 0.3881,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3235,
+            0.25
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 272,
+          "mean_hits": 0.3015,
+          "lift_vs_random": 0.0237,
+          "p": 0.2289,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3309,
+            0.2721
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_v1": {
+          "n": 272,
+          "mean_hits": 0.2941,
+          "lift_vs_random": 0.0163,
+          "p": 0.2985,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2721,
+            0.3162
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 272,
+          "mean_hits": 0.2574,
+          "lift_vs_random": -0.0204,
+          "p": 0.7612,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3382,
+            0.1765
+          ],
+          "q": 0.9435,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:top_k_frequency": {
+          "n": 272,
+          "mean_hits": 0.2978,
+          "lift_vs_random": 0.02,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3088,
+            0.2868
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:rolling_frequency": {
+          "n": 272,
+          "mean_hits": 0.2941,
+          "lift_vs_random": 0.0163,
+          "p": 0.2985,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3088,
+            0.2794
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 272,
+          "mean_hits": 0.2978,
+          "lift_vs_random": 0.02,
+          "p": 0.2587,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3088,
+            0.2868
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:ensemble_v1": {
+          "n": 272,
+          "mean_hits": 0.3088,
+          "lift_vs_random": 0.031,
+          "p": 0.1692,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3456,
+            0.2721
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_numbers": {
+          "n": 272,
+          "mean_hits": 0.2684,
+          "lift_vs_random": -0.0094,
+          "p": 0.6368,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3088,
+            0.2279
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:image_numbers": {
+          "n": 272,
+          "mean_hits": 0.2941,
+          "lift_vs_random": 0.0163,
+          "p": 0.2985,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2794,
+            0.3088
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image": {
+          "n": 272,
+          "mean_hits": 0.2941,
+          "lift_vs_random": 0.0163,
+          "p": 0.2985,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3015,
+            0.2868
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 272,
+          "mean_hits": 0.261,
+          "lift_vs_random": -0.0167,
+          "p": 0.7114,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3088,
+            0.2132
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 272,
+          "mean_hits": 0.3088,
+          "lift_vs_random": 0.031,
+          "p": 0.1692,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3456,
+            0.2721
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_family": {
+          "n": 272,
+          "mean_hits": 0.3088,
+          "lift_vs_random": 0.031,
+          "p": 0.1692,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3382,
+            0.2794
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 272,
+          "mean_hits": 0.2721,
+          "lift_vs_random": -0.0057,
+          "p": 0.602,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2647,
+            0.2794
+          ],
+          "q": 0.903,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 272,
+          "mean_hits": 2.2426,
+          "lift_vs_random": 1.9649,
+          "p": 0.005,
+          "p_ge3_obs": 0.4265,
+          "half": [
+            2.3015,
+            2.1838
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 272,
+          "mean_hits": 0.25,
+          "lift_vs_random": -0.0278,
+          "p": 0.8308,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2279,
+            0.2721
+          ],
+          "switches": [
+            [
+              "majority",
+              "model:calling_image_position",
+              0.45
+            ],
+            [
+              "model:calling_image_position",
+              "model:meta_consensus_count",
+              0.075
+            ],
+            [
+              "model:meta_consensus_count",
+              "model:frequency_delay_v1",
+              0.075
+            ],
+            [
+              "model:frequency_delay_v1",
+              "model:ensemble_v1",
+              0.05
+            ],
+            [
+              "model:ensemble_v1",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_numbers",
+              0.075
+            ],
+            [
+              "model:calling_numbers",
+              "model:monte_carlo_v1",
+              0.075
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "fusion:borda",
+              0.075
+            ],
+            [
+              "fusion:borda",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:frequency_delay_v1",
+              0.075
+            ],
+            [
+              "model:frequency_delay_v1",
+              "model:cold_delay_v1",
+              0.075
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:bayesian_v1",
+              0.1
+            ],
+            [
+              "model:bayesian_v1",
+              "model:image_numbers",
+              0.05
+            ]
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2768,
+      "random_sd": 0.0288,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "cash",
+      "n_draws_total": 311,
+      "n_evaluated": 271,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 271,
+          "mean_hits": 0.3026,
+          "lift_vs_random": 0.0248,
+          "p": 0.1891,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3037,
+            0.3015
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "fusion:borda": {
+          "n": 271,
+          "mean_hits": 0.2841,
+          "lift_vs_random": 0.0064,
+          "p": 0.4527,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3556,
+            0.2132
+          ],
+          "q": 0.8149,
+          "verdict": "compatible hasard"
+        },
+        "fusion:union": {
+          "n": 271,
+          "mean_hits": 0.2952,
+          "lift_vs_random": 0.0174,
+          "p": 0.2836,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2889,
+            0.3015
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:hot_frequency_v1": {
+          "n": 271,
+          "mean_hits": 0.2731,
+          "lift_vs_random": -0.0047,
+          "p": 0.6318,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3037,
+            0.2426
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:cold_delay_v1": {
+          "n": 271,
+          "mean_hits": 0.2731,
+          "lift_vs_random": -0.0047,
+          "p": 0.6318,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3185,
+            0.2279
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:frequency_delay_v1": {
+          "n": 271,
+          "mean_hits": 0.2325,
+          "lift_vs_random": -0.0453,
+          "p": 0.9353,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2444,
+            0.2206
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:pair_frequency_v1": {
+          "n": 271,
+          "mean_hits": 0.31,
+          "lift_vs_random": 0.0322,
+          "p": 0.1194,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2741,
+            0.3456
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 271,
+          "mean_hits": 0.31,
+          "lift_vs_random": 0.0322,
+          "p": 0.1194,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3556,
+            0.2647
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_v1": {
+          "n": 271,
+          "mean_hits": 0.2768,
+          "lift_vs_random": -0.001,
+          "p": 0.5771,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2519,
+            0.3015
+          ],
+          "q": 0.8982,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:monte_carlo_v1": {
+          "n": 271,
+          "mean_hits": 0.2878,
+          "lift_vs_random": 0.01,
+          "p": 0.403,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2593,
+            0.3162
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:top_k_frequency": {
+          "n": 271,
+          "mean_hits": 0.3026,
+          "lift_vs_random": 0.0248,
+          "p": 0.1891,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3111,
+            0.2941
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:rolling_frequency": {
+          "n": 271,
+          "mean_hits": 0.2989,
+          "lift_vs_random": 0.0211,
+          "p": 0.2388,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3111,
+            0.2868
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 271,
+          "mean_hits": 0.3026,
+          "lift_vs_random": 0.0248,
+          "p": 0.1891,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3111,
+            0.2941
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:ensemble_v1": {
+          "n": 271,
+          "mean_hits": 0.2546,
+          "lift_vs_random": -0.0232,
+          "p": 0.796,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3259,
+            0.1838
+          ],
+          "q": 0.9636,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_numbers": {
+          "n": 271,
+          "mean_hits": 0.2731,
+          "lift_vs_random": -0.0047,
+          "p": 0.6318,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2741,
+            0.2721
+          ],
+          "q": 0.9154,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:image_numbers": {
+          "n": 271,
+          "mean_hits": 0.2288,
+          "lift_vs_random": -0.049,
+          "p": 0.9552,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2667,
+            0.1912
+          ],
+          "q": 0.9837,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image": {
+          "n": 271,
+          "mean_hits": 0.2694,
+          "lift_vs_random": -0.0084,
+          "p": 0.6567,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2963,
+            0.2426
+          ],
+          "q": 0.9247,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image_position": {
+          "n": 271,
+          "mean_hits": 0.2325,
+          "lift_vs_random": -0.0453,
+          "p": 0.9353,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2148,
+            0.25
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 271,
+          "mean_hits": 0.3026,
+          "lift_vs_random": 0.0248,
+          "p": 0.1891,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3037,
+            0.3015
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_family": {
+          "n": 271,
+          "mean_hits": 0.3173,
+          "lift_vs_random": 0.0396,
+          "p": 0.0896,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3185,
+            0.3162
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:random": {
+          "n": 271,
+          "mean_hits": 0.31,
+          "lift_vs_random": 0.0322,
+          "p": 0.1194,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3185,
+            0.3015
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "coverage": {
+          "n": 271,
+          "mean_hits": 2.0701,
+          "lift_vs_random": 1.7923,
+          "p": 0.005,
+          "p_ge3_obs": 0.3616,
+          "half": [
+            2.0667,
+            2.0735
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 271,
+          "mean_hits": 0.2066,
+          "lift_vs_random": -0.0711,
+          "p": 0.9851,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2148,
+            0.1985
+          ],
+          "switches": [
+            [
+              "majority",
+              "fusion:borda",
+              0.65
+            ],
+            [
+              "fusion:borda",
+              "model:random",
+              0.075
+            ],
+            [
+              "model:random",
+              "model:calling_image",
+              0.05
+            ],
+            [
+              "model:calling_image",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "fusion:borda",
+              0.075
+            ],
+            [
+              "fusion:borda",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:meta_consensus_family",
+              0.1
+            ],
+            [
+              "model:meta_consensus_family",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:meta_consensus_family",
+              0.075
+            ],
+            [
+              "model:meta_consensus_family",
+              "model:pair_frequency_v1",
+              0.05
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:monte_carlo_v1",
+              0.05
+            ]
+          ],
+          "q": 0.995,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2771,
+      "random_sd": 0.0295,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "espoir",
+      "n_draws_total": 312,
+      "n_evaluated": 272,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 272,
+          "mean_hits": 0.2132,
+          "lift_vs_random": -0.0645,
+          "p": 0.995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2059,
+            0.2206
+          ],
+          "q": 0.995,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:borda": {
+          "n": 272,
+          "mean_hits": 0.2574,
+          "lift_vs_random": -0.0204,
+          "p": 0.7562,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.25,
+            0.2647
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:union": {
+          "n": 272,
+          "mean_hits": 0.2132,
+          "lift_vs_random": -0.0645,
+          "p": 0.995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.1912,
+            0.2353
+          ],
+          "q": 0.995,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:hot_frequency_v1": {
+          "n": 272,
+          "mean_hits": 0.261,
+          "lift_vs_random": -0.0167,
+          "p": 0.7065,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2279,
+            0.2941
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:cold_delay_v1": {
+          "n": 272,
+          "mean_hits": 0.3162,
+          "lift_vs_random": 0.0384,
+          "p": 0.1343,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3235,
+            0.3088
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:frequency_delay_v1": {
+          "n": 272,
+          "mean_hits": 0.2353,
+          "lift_vs_random": -0.0425,
+          "p": 0.9154,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2206,
+            0.25
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:pair_frequency_v1": {
+          "n": 272,
+          "mean_hits": 0.2904,
+          "lift_vs_random": 0.0127,
+          "p": 0.3433,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.3529,
+            0.2279
+          ],
+          "q": 0.7641,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 272,
+          "mean_hits": 0.2574,
+          "lift_vs_random": -0.0204,
+          "p": 0.7562,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2426,
+            0.2721
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_v1": {
+          "n": 272,
+          "mean_hits": 0.2831,
+          "lift_vs_random": 0.0053,
+          "p": 0.4229,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2941,
+            0.2721
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 272,
+          "mean_hits": 0.2831,
+          "lift_vs_random": 0.0053,
+          "p": 0.4229,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2721,
+            0.2941
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:top_k_frequency": {
+          "n": 272,
+          "mean_hits": 0.2353,
+          "lift_vs_random": -0.0425,
+          "p": 0.9154,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2279,
+            0.2426
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:rolling_frequency": {
+          "n": 272,
+          "mean_hits": 0.2132,
+          "lift_vs_random": -0.0645,
+          "p": 0.995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2279,
+            0.1985
+          ],
+          "q": 0.995,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 272,
+          "mean_hits": 0.2353,
+          "lift_vs_random": -0.0425,
+          "p": 0.9154,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2279,
+            0.2426
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:ensemble_v1": {
+          "n": 272,
+          "mean_hits": 0.2721,
+          "lift_vs_random": -0.0057,
+          "p": 0.602,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2721,
+            0.2721
+          ],
+          "q": 0.903,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_numbers": {
+          "n": 272,
+          "mean_hits": 0.2794,
+          "lift_vs_random": 0.0016,
+          "p": 0.4925,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2647,
+            0.2941
+          ],
+          "q": 0.8496,
+          "verdict": "compatible hasard"
+        },
+        "model:image_numbers": {
+          "n": 272,
+          "mean_hits": 0.2868,
+          "lift_vs_random": 0.009,
+          "p": 0.398,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.25,
+            0.3235
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image": {
+          "n": 272,
+          "mean_hits": 0.2794,
+          "lift_vs_random": 0.0016,
+          "p": 0.4925,
+          "p_ge3_obs": 0.0037,
+          "half": [
+            0.2426,
+            0.3162
+          ],
+          "q": 0.8496,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 272,
+          "mean_hits": 0.3125,
+          "lift_vs_random": 0.0347,
+          "p": 0.1443,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3382,
+            0.2868
+          ],
+          "q": 0.6638,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_count": {
+          "n": 272,
+          "mean_hits": 0.239,
+          "lift_vs_random": -0.0388,
+          "p": 0.8756,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2132,
+            0.2647
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_family": {
+          "n": 272,
+          "mean_hits": 0.2353,
+          "lift_vs_random": -0.0425,
+          "p": 0.9154,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2206,
+            0.25
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:random": {
+          "n": 272,
+          "mean_hits": 0.2721,
+          "lift_vs_random": -0.0057,
+          "p": 0.602,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2868,
+            0.2574
+          ],
+          "q": 0.903,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 272,
+          "mean_hits": 2.1397,
+          "lift_vs_random": 1.8619,
+          "p": 0.005,
+          "p_ge3_obs": 0.375,
+          "half": [
+            2.0735,
+            2.2059
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 272,
+          "mean_hits": 0.2757,
+          "lift_vs_random": -0.002,
+          "p": 0.5572,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2647,
+            0.2868
+          ],
+          "switches": [
+            [
+              "majority",
+              "fusion:borda",
+              0.4
+            ],
+            [
+              "fusion:borda",
+              "model:bayesian_v1",
+              0.0833
+            ],
+            [
+              "model:bayesian_v1",
+              "model:calling_image_position",
+              0.075
+            ],
+            [
+              "model:calling_image_position",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:random",
+              0.05
+            ],
+            [
+              "model:random",
+              "model:calling_image",
+              0.05
+            ],
+            [
+              "model:calling_image",
+              "model:image_numbers",
+              0.075
+            ],
+            [
+              "model:image_numbers",
+              "model:top_k_frequency",
+              0.075
+            ],
+            [
+              "model:top_k_frequency",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_image",
+              0.075
+            ]
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2769,
+      "random_sd": 0.0315,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "fortune_thursday",
+      "n_draws_total": 297,
+      "n_evaluated": 257,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 257,
+          "mean_hits": 0.2724,
+          "lift_vs_random": -0.0054,
+          "p": 0.5821,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2812,
+            0.2636
+          ],
+          "q": 0.8992,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:borda": {
+          "n": 257,
+          "mean_hits": 0.2646,
+          "lift_vs_random": -0.0132,
+          "p": 0.6915,
+          "p_ge3_obs": 0.0078,
+          "half": [
+            0.2656,
+            0.2636
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:union": {
+          "n": 257,
+          "mean_hits": 0.2607,
+          "lift_vs_random": -0.0171,
+          "p": 0.7264,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2656,
+            0.2558
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:hot_frequency_v1": {
+          "n": 257,
+          "mean_hits": 0.2996,
+          "lift_vs_random": 0.0218,
+          "p": 0.2985,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.3438,
+            0.2558
+          ],
+          "q": 0.6943,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 257,
+          "mean_hits": 0.2412,
+          "lift_vs_random": -0.0365,
+          "p": 0.9055,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2734,
+            0.2093
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:frequency_delay_v1": {
+          "n": 257,
+          "mean_hits": 0.2879,
+          "lift_vs_random": 0.0102,
+          "p": 0.4229,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3281,
+            0.2481
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:pair_frequency_v1": {
+          "n": 257,
+          "mean_hits": 0.2918,
+          "lift_vs_random": 0.0141,
+          "p": 0.3781,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3203,
+            0.2636
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 257,
+          "mean_hits": 0.2257,
+          "lift_vs_random": -0.0521,
+          "p": 0.9602,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2344,
+            0.2171
+          ],
+          "q": 0.984,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_v1": {
+          "n": 257,
+          "mean_hits": 0.2879,
+          "lift_vs_random": 0.0102,
+          "p": 0.4229,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2656,
+            0.3101
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 257,
+          "mean_hits": 0.2412,
+          "lift_vs_random": -0.0365,
+          "p": 0.9055,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2578,
+            0.2248
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:top_k_frequency": {
+          "n": 257,
+          "mean_hits": 0.2529,
+          "lift_vs_random": -0.0249,
+          "p": 0.8408,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2344,
+            0.2713
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:rolling_frequency": {
+          "n": 257,
+          "mean_hits": 0.2607,
+          "lift_vs_random": -0.0171,
+          "p": 0.7264,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2344,
+            0.2868
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 257,
+          "mean_hits": 0.2529,
+          "lift_vs_random": -0.0249,
+          "p": 0.8408,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2344,
+            0.2713
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:ensemble_v1": {
+          "n": 257,
+          "mean_hits": 0.2607,
+          "lift_vs_random": -0.0171,
+          "p": 0.7264,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2656,
+            0.2558
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_numbers": {
+          "n": 257,
+          "mean_hits": 0.3191,
+          "lift_vs_random": 0.0413,
+          "p": 0.1343,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3438,
+            0.2946
+          ],
+          "q": 0.6318,
+          "verdict": "compatible hasard"
+        },
+        "model:image_numbers": {
+          "n": 257,
+          "mean_hits": 0.3035,
+          "lift_vs_random": 0.0257,
+          "p": 0.2637,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3125,
+            0.2946
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image": {
+          "n": 257,
+          "mean_hits": 0.3074,
+          "lift_vs_random": 0.0296,
+          "p": 0.2289,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2734,
+            0.3411
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 257,
+          "mean_hits": 0.2763,
+          "lift_vs_random": -0.0015,
+          "p": 0.5572,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3203,
+            0.2326
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_count": {
+          "n": 257,
+          "mean_hits": 0.2763,
+          "lift_vs_random": -0.0015,
+          "p": 0.5572,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2812,
+            0.2713
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_family": {
+          "n": 257,
+          "mean_hits": 0.2529,
+          "lift_vs_random": -0.0249,
+          "p": 0.8408,
+          "p_ge3_obs": 0.0039,
+          "half": [
+            0.2734,
+            0.2326
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:random": {
+          "n": 257,
+          "mean_hits": 0.2335,
+          "lift_vs_random": -0.0443,
+          "p": 0.9403,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2109,
+            0.2558
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "coverage": {
+          "n": 257,
+          "mean_hits": 2.2023,
+          "lift_vs_random": 1.9246,
+          "p": 0.005,
+          "p_ge3_obs": 0.3891,
+          "half": [
+            2.2344,
+            2.1705
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 257,
+          "mean_hits": 0.1907,
+          "lift_vs_random": -0.0871,
+          "p": 0.995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.1562,
+            0.2248
+          ],
+          "switches": [
+            [
+              "majority",
+              "model:hot_frequency_v1",
+              0.4
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_image_position",
+              0.0769
+            ],
+            [
+              "model:calling_image_position",
+              "model:hot_frequency_v1",
+              0.0645
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:calling_image_position",
+              0.05
+            ],
+            [
+              "model:calling_image_position",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:hot_frequency_v1",
+              0.075
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:image_numbers",
+              0.075
+            ],
+            [
+              "model:image_numbers",
+              "model:cold_delay_v1",
+              0.125
+            ],
+            [
+              "model:cold_delay_v1",
+              "model:bayesian_v1",
+              0.05
+            ],
+            [
+              "model:bayesian_v1",
+              "model:calling_numbers",
+              0.075
+            ],
+            [
+              "model:calling_numbers",
+              "model:pair_frequency_v1",
+              0.05
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:image_numbers",
+              0.05
+            ],
+            [
+              "model:image_numbers",
+              "model:bayesian_v1",
+              0.075
+            ],
+            [
+              "model:bayesian_v1",
+              "model:monte_carlo_v1",
+              0.075
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:calling_image_position",
+              0.05
+            ]
+          ],
+          "q": 0.995,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2795,
+      "random_sd": 0.0332,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    },
+    {
+      "game": "afterwork",
+      "n_draws_total": 230,
+      "n_evaluated": 190,
+      "first_date": null,
+      "last_date": null,
+      "strategies": {
+        "fusion:majority": {
+          "n": 190,
+          "mean_hits": 0.2737,
+          "lift_vs_random": -0.0041,
+          "p": 0.5672,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3263,
+            0.2211
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "fusion:borda": {
+          "n": 190,
+          "mean_hits": 0.2789,
+          "lift_vs_random": 0.0012,
+          "p": 0.5124,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3263,
+            0.2316
+          ],
+          "q": 0.8554,
+          "verdict": "compatible hasard"
+        },
+        "fusion:union": {
+          "n": 190,
+          "mean_hits": 0.2737,
+          "lift_vs_random": -0.0041,
+          "p": 0.5672,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3263,
+            0.2211
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:hot_frequency_v1": {
+          "n": 190,
+          "mean_hits": 0.3053,
+          "lift_vs_random": 0.0275,
+          "p": 0.2289,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3474,
+            0.2632
+          ],
+          "q": 0.6907,
+          "verdict": "compatible hasard"
+        },
+        "model:cold_delay_v1": {
+          "n": 190,
+          "mean_hits": 0.2632,
+          "lift_vs_random": -0.0146,
+          "p": 0.7164,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2526,
+            0.2737
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:frequency_delay_v1": {
+          "n": 190,
+          "mean_hits": 0.2579,
+          "lift_vs_random": -0.0199,
+          "p": 0.7662,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2421,
+            0.2737
+          ],
+          "q": 0.9441,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:pair_frequency_v1": {
+          "n": 190,
+          "mean_hits": 0.2947,
+          "lift_vs_random": 0.017,
+          "p": 0.3035,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3263,
+            0.2632
+          ],
+          "q": 0.6981,
+          "verdict": "compatible hasard"
+        },
+        "model:balanced_v1": {
+          "n": 190,
+          "mean_hits": 0.2632,
+          "lift_vs_random": -0.0146,
+          "p": 0.7164,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3158,
+            0.2105
+          ],
+          "q": 0.943,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:bayesian_v1": {
+          "n": 190,
+          "mean_hits": 0.2895,
+          "lift_vs_random": 0.0117,
+          "p": 0.3781,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3263,
+            0.2526
+          ],
+          "q": 0.7747,
+          "verdict": "compatible hasard"
+        },
+        "model:monte_carlo_v1": {
+          "n": 190,
+          "mean_hits": 0.2789,
+          "lift_vs_random": 0.0012,
+          "p": 0.5124,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2632,
+            0.2947
+          ],
+          "q": 0.8554,
+          "verdict": "compatible hasard"
+        },
+        "model:top_k_frequency": {
+          "n": 190,
+          "mean_hits": 0.3263,
+          "lift_vs_random": 0.0485,
+          "p": 0.0995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3579,
+            0.2947
+          ],
+          "q": 0.5885,
+          "verdict": "compatible hasard"
+        },
+        "model:rolling_frequency": {
+          "n": 190,
+          "mean_hits": 0.3316,
+          "lift_vs_random": 0.0538,
+          "p": 0.0846,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3579,
+            0.3053
+          ],
+          "q": 0.5796,
+          "verdict": "compatible hasard"
+        },
+        "model:bayesian_shrinkage": {
+          "n": 190,
+          "mean_hits": 0.3263,
+          "lift_vs_random": 0.0485,
+          "p": 0.0995,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3579,
+            0.2947
+          ],
+          "q": 0.5885,
+          "verdict": "compatible hasard"
+        },
+        "model:ensemble_v1": {
+          "n": 190,
+          "mean_hits": 0.2842,
+          "lift_vs_random": 0.0064,
+          "p": 0.4328,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2842,
+            0.2842
+          ],
+          "q": 0.7859,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_numbers": {
+          "n": 190,
+          "mean_hits": 0.2789,
+          "lift_vs_random": 0.0012,
+          "p": 0.5124,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2947,
+            0.2632
+          ],
+          "q": 0.8554,
+          "verdict": "compatible hasard"
+        },
+        "model:image_numbers": {
+          "n": 190,
+          "mean_hits": 0.2263,
+          "lift_vs_random": -0.0515,
+          "p": 0.9353,
+          "p_ge3_obs": 0.0053,
+          "half": [
+            0.2316,
+            0.2211
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:calling_image": {
+          "n": 190,
+          "mean_hits": 0.3105,
+          "lift_vs_random": 0.0327,
+          "p": 0.1741,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3579,
+            0.2632
+          ],
+          "q": 0.6866,
+          "verdict": "compatible hasard"
+        },
+        "model:calling_image_position": {
+          "n": 190,
+          "mean_hits": 0.3263,
+          "lift_vs_random": 0.0485,
+          "p": 0.0995,
+          "p_ge3_obs": 0.0053,
+          "half": [
+            0.4211,
+            0.2316
+          ],
+          "q": 0.5885,
+          "verdict": "compatible hasard"
+        },
+        "model:meta_consensus_count": {
+          "n": 190,
+          "mean_hits": 0.2737,
+          "lift_vs_random": -0.0041,
+          "p": 0.5672,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3368,
+            0.2105
+          ],
+          "q": 0.8963,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:meta_consensus_family": {
+          "n": 190,
+          "mean_hits": 0.2474,
+          "lift_vs_random": -0.0304,
+          "p": 0.8408,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2737,
+            0.2211
+          ],
+          "q": 0.9723,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        },
+        "model:random": {
+          "n": 190,
+          "mean_hits": 0.3474,
+          "lift_vs_random": 0.0696,
+          "p": 0.0398,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.3789,
+            0.3158
+          ],
+          "q": 0.3745,
+          "verdict": "compatible hasard"
+        },
+        "coverage": {
+          "n": 190,
+          "mean_hits": 2.1895,
+          "lift_vs_random": 1.9117,
+          "p": 0.005,
+          "p_ge3_obs": 0.4105,
+          "half": [
+            2.2947,
+            2.0842
+          ],
+          "q": 0.0575,
+          "verdict": "m\u00e9trique th\u00e9orique (union des picks, injouable)"
+        },
+        "selector": {
+          "n": 190,
+          "mean_hits": 0.2263,
+          "lift_vs_random": -0.0515,
+          "p": 0.9353,
+          "p_ge3_obs": 0.0,
+          "half": [
+            0.2526,
+            0.2
+          ],
+          "switches": [
+            [
+              "majority",
+              "fusion:borda",
+              0.55
+            ],
+            [
+              "fusion:borda",
+              "model:pair_frequency_v1",
+              0.075
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:calling_image",
+              0.075
+            ],
+            [
+              "model:calling_image",
+              "model:calling_image_position",
+              0.075
+            ],
+            [
+              "model:calling_image_position",
+              "model:calling_numbers",
+              0.05
+            ],
+            [
+              "model:calling_numbers",
+              "model:hot_frequency_v1",
+              0.05
+            ],
+            [
+              "model:hot_frequency_v1",
+              "model:pair_frequency_v1",
+              0.1
+            ],
+            [
+              "model:pair_frequency_v1",
+              "model:top_k_frequency",
+              0.05
+            ],
+            [
+              "model:top_k_frequency",
+              "model:calling_image_position",
+              0.05
+            ],
+            [
+              "model:calling_image_position",
+              "model:random",
+              0.1
+            ],
+            [
+              "model:random",
+              "model:monte_carlo_v1",
+              0.05
+            ],
+            [
+              "model:monte_carlo_v1",
+              "model:random",
+              0.075
+            ]
+          ],
+          "q": 0.9781,
+          "verdict": "\u2264 r\u00e9f\u00e9rence"
+        }
+      },
+      "random_mean": 0.2778,
+      "random_sd": 0.0336,
+      "expected_hits_null": 0.2777777777777778,
+      "expected_ge3_per_1000": 0.822
+    }
+  ]
+}
