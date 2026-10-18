@@ -46,7 +46,7 @@ STANDARD_FORMULAS = {
         description="Parier sur 1 numéro exact",
         numbers_required=1,
         unit_stake=Decimal("100"),
-        odds={"PN": Decimal("55")},
+        odds={"PN": Decimal("40")},
     ),
     "1N": FormulaConfig(
         code="1N",
@@ -55,7 +55,7 @@ STANDARD_FORMULAS = {
         description="Parier sur 1 numéro gagnant",
         numbers_required=1,
         unit_stake=Decimal("100"),
-        odds={"1N": Decimal("11")},
+        odds={"1N": Decimal("10")},
     ),
     "2N": FormulaConfig(
         code="2N",

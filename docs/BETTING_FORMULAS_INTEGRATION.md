@@ -13,8 +13,8 @@ The betting formulas from Loto Bonheur (LONACI) have been integrated to allow ag
 ## Official Formulas
 
 ### Standard Formulas
-- **PN** (Prédiction Numérique): 1 numéro, côte 55
-- **1N**: 1 numéro, côte 11
+- **PN** (Prédiction Numérique): 1 numéro, côte 40
+- **1N**: 1 numéro, côte 10
 - **2N**: 2 numéros, côte 240
 - **3N**: 3 numéros, côte 2 000
 - **4N**: 4 numéros, côte 5 000

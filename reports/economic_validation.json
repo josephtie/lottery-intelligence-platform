@@ -1,0 +1,334 @@
+{
+  "stake": 100,
+  "window": 60,
+  "holdout": 200,
+  "odds": {
+    "1N": 10,
+    "2N": 240,
+    "PN": 40
+  },
+  "games": [
+    {
+      "game": "Digital 21h",
+      "n_total": 1676,
+      "n_evaluated": 1615,
+      "split_dev": 1415,
+      "holdout": 200,
+      "dev:1N_freq": {
+        "n": 1415,
+        "total_stake": 141500,
+        "wins": 98,
+        "win_rate": 0.06926,
+        "total_net": -43500,
+        "roi": -0.3074,
+        "ev_per_bet": -30.74,
+        "ev_ci95": [
+          -44.17,
+          -17.31
+        ],
+        "roi_ci95": [
+          -0.4417,
+          -0.1731
+        ],
+        "max_drawdown": 43700,
+        "ev_pvalue": 0.0199
+      },
+      "dev:2N_freq": {
+        "n": 1415,
+        "total_stake": 141500,
+        "wins": 3,
+        "win_rate": 0.00212,
+        "total_net": -69500,
+        "roi": -0.4912,
+        "ev_per_bet": -49.12,
+        "ev_ci95": [
+          -100.0,
+          18.73
+        ],
+        "roi_ci95": [
+          -1.0,
+          0.1873
+        ],
+        "max_drawdown": 74700,
+        "ev_pvalue": 0.5373
+      },
+      "dev:1N_rand": {
+        "n": 1415,
+        "total_stake": 141500,
+        "wins": 75,
+        "win_rate": 0.053,
+        "total_net": -66500,
+        "roi": -0.47,
+        "ev_per_bet": -47.0,
+        "ev_ci95": [
+          -59.01,
+          -34.98
+        ],
+        "roi_ci95": [
+          -0.5901,
+          -0.3498
+        ],
+        "max_drawdown": 66800,
+        "ev_pvalue": 0.6269
+      },
+      "dev:2N_rand": {
+        "n": 1415,
+        "total_stake": 141500,
+        "wins": 3,
+        "win_rate": 0.00212,
+        "total_net": -69500,
+        "roi": -0.4912,
+        "ev_per_bet": -49.12,
+        "ev_ci95": [
+          -100.0,
+          18.73
+        ],
+        "roi_ci95": [
+          -1.0,
+          0.1873
+        ],
+        "max_drawdown": 79600,
+        "ev_pvalue": 0.5373
+      },
+      "holdout:1N_freq": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 10,
+        "win_rate": 0.05,
+        "total_net": -10000,
+        "roi": -0.5,
+        "ev_per_bet": -50.0,
+        "ev_ci95": [
+          -80.0,
+          -20.0
+        ],
+        "roi_ci95": [
+          -0.8,
+          -0.2
+        ],
+        "max_drawdown": 10000,
+        "ev_pvalue": 0.806
+      },
+      "holdout:2N_freq": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 0,
+        "win_rate": 0.0,
+        "total_net": -20000,
+        "roi": -1.0,
+        "ev_per_bet": -100.0,
+        "ev_ci95": [
+          -100.0,
+          -100.0
+        ],
+        "roi_ci95": [
+          -1.0,
+          -1.0
+        ],
+        "max_drawdown": 20000,
+        "ev_pvalue": 1.0
+      },
+      "holdout:1N_rand": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 12,
+        "win_rate": 0.06,
+        "total_net": -8000,
+        "roi": -0.4,
+        "ev_per_bet": -40.0,
+        "ev_ci95": [
+          -70.0,
+          -5.0
+        ],
+        "roi_ci95": [
+          -0.7,
+          -0.05
+        ],
+        "max_drawdown": 9300,
+        "ev_pvalue": 0.2289
+      },
+      "holdout:2N_rand": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 0,
+        "win_rate": 0.0,
+        "total_net": -20000,
+        "roi": -1.0,
+        "ev_per_bet": -100.0,
+        "ev_ci95": [
+          -100.0,
+          -100.0
+        ],
+        "roi_ci95": [
+          -1.0,
+          -1.0
+        ],
+        "max_drawdown": 20000,
+        "ev_pvalue": 1.0
+      },
+      "null_1n_ev_mean": -44.96,
+      "null_2n_ev_mean": -42.79
+    },
+    {
+      "game": "Digital 23h",
+      "n_total": 1623,
+      "n_evaluated": 1562,
+      "split_dev": 1362,
+      "holdout": 200,
+      "dev:1N_freq": {
+        "n": 1362,
+        "total_stake": 136200,
+        "wins": 89,
+        "win_rate": 0.06535,
+        "total_net": -47200,
+        "roi": -0.3465,
+        "ev_per_bet": -34.65,
+        "ev_ci95": [
+          -46.4,
+          -21.44
+        ],
+        "roi_ci95": [
+          -0.464,
+          -0.2144
+        ],
+        "max_drawdown": 47400,
+        "ev_pvalue": 0.0498
+      },
+      "dev:2N_freq": {
+        "n": 1362,
+        "total_stake": 136200,
+        "wins": 5,
+        "win_rate": 0.00367,
+        "total_net": -16200,
+        "roi": -0.1189,
+        "ev_per_bet": -11.89,
+        "ev_ci95": [
+          -82.38,
+          76.21
+        ],
+        "roi_ci95": [
+          -0.8238,
+          0.7621
+        ],
+        "max_drawdown": 51600,
+        "ev_pvalue": 0.2289
+      },
+      "dev:1N_rand": {
+        "n": 1362,
+        "total_stake": 136200,
+        "wins": 80,
+        "win_rate": 0.05874,
+        "total_net": -56200,
+        "roi": -0.4126,
+        "ev_per_bet": -41.26,
+        "ev_ci95": [
+          -53.01,
+          -28.05
+        ],
+        "roi_ci95": [
+          -0.5301,
+          -0.2805
+        ],
+        "max_drawdown": 56900,
+        "ev_pvalue": 0.3184
+      },
+      "dev:2N_rand": {
+        "n": 1362,
+        "total_stake": 136200,
+        "wins": 2,
+        "win_rate": 0.00147,
+        "total_net": -88200,
+        "roi": -0.6476,
+        "ev_per_bet": -64.76,
+        "ev_ci95": [
+          -100.0,
+          -11.89
+        ],
+        "roi_ci95": [
+          -1.0,
+          -0.1189
+        ],
+        "max_drawdown": 88200,
+        "ev_pvalue": 0.7512
+      },
+      "holdout:1N_freq": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 16,
+        "win_rate": 0.08,
+        "total_net": -4000,
+        "roi": -0.2,
+        "ev_per_bet": -20.0,
+        "ev_ci95": [
+          -55.0,
+          25.0
+        ],
+        "roi_ci95": [
+          -0.55,
+          0.25
+        ],
+        "max_drawdown": 5600,
+        "ev_pvalue": 0.005
+      },
+      "holdout:2N_freq": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 1,
+        "win_rate": 0.005,
+        "total_net": 4000,
+        "roi": 0.2,
+        "ev_per_bet": 20.0,
+        "ev_ci95": [
+          -100.0,
+          380.0
+        ],
+        "roi_ci95": [
+          -1.0,
+          3.8
+        ],
+        "max_drawdown": 17000,
+        "ev_pvalue": 0.0697
+      },
+      "holdout:1N_rand": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 5,
+        "win_rate": 0.025,
+        "total_net": -15000,
+        "roi": -0.75,
+        "ev_per_bet": -75.0,
+        "ev_ci95": [
+          -95.0,
+          -50.0
+        ],
+        "roi_ci95": [
+          -0.95,
+          -0.5
+        ],
+        "max_drawdown": 15000,
+        "ev_pvalue": 1.0
+      },
+      "holdout:2N_rand": {
+        "n": 200,
+        "total_stake": 20000,
+        "wins": 0,
+        "win_rate": 0.0,
+        "total_net": -20000,
+        "roi": -1.0,
+        "ev_per_bet": -100.0,
+        "ev_ci95": [
+          -100.0,
+          -100.0
+        ],
+        "roi_ci95": [
+          -1.0,
+          -1.0
+        ],
+        "max_drawdown": 20000,
+        "ev_pvalue": 1.0
+      },
+      "null_1n_ev_mean": -44.73,
+      "null_2n_ev_mean": -37.46
+    }
+  ]
+}
