@@ -216,6 +216,26 @@ def complementary_pairs(
 
 
 # ---------------------------------------------------------------------------
+# Multiple-testing correction
+# ---------------------------------------------------------------------------
+
+def benjamini_hochberg(pvals: Sequence[tuple[str, float]]) -> dict[str, float]:
+    """Benjamini-Hochberg q-values, monotonic from the largest p.
+
+    q_i = min_{j >= i} (p_j * m / rank_j) after sorting p ascending.
+    """
+    sorted_p = sorted(pvals, key=lambda x: x[1])
+    m = len(sorted_p)
+    bh = [p * m / (i + 1) for i, (_, p) in enumerate(sorted_p)]
+    q_vals = [0.0] * m
+    running_min = 1.0
+    for i in range(m - 1, -1, -1):
+        running_min = min(running_min, bh[i])
+        q_vals[i] = running_min
+    return {label: round(q_vals[i], 4) for i, (label, _) in enumerate(sorted_p)}
+
+
+# ---------------------------------------------------------------------------
 # Official-formula settlement (mission §3, betting_formulas.py)
 # ---------------------------------------------------------------------------
 
