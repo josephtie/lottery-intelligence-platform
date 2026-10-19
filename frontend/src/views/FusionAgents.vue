@@ -105,6 +105,11 @@
           <span class="reasoning">{{ row.reasoning }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="" width="90" fixed="right">
+        <template #default="{ row }">
+          <el-button size="small" type="primary" @click="openDetail(row)">Détails</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <Pager
@@ -113,6 +118,105 @@
       :total="filtered.length"
       :label="`${filtered.length} agents`"
     />
+
+    <el-drawer
+      v-model="drawerVisible"
+      :title="detail?.display_name || 'Détail du parieur'"
+      direction="rtl"
+      size="52%"
+    >
+      <div v-if="detailLoading" class="drawer-loading">
+        <el-skeleton :rows="6" animated />
+      </div>
+      <div v-else-if="detailErr" class="drawer-error">
+        <el-alert type="error" :closable="false" show-icon>{{ detailErr }}</el-alert>
+      </div>
+      <div v-else-if="detail" class="drawer-content">
+        <div class="detail-head">
+          <div class="head-stat">
+            <div class="head-label">Capital virtuel</div>
+            <div class="head-value">{{ fmtF(detail.capital) }} F</div>
+          </div>
+          <div class="head-stat">
+            <div class="head-label">Profit net</div>
+            <div class="head-value" :class="detail.profit_net >= 0 ? 'text-green' : 'text-red'">
+              {{ detail.profit_net >= 0 ? '+' : '' }}{{ fmtF(detail.profit_net) }} F
+            </div>
+          </div>
+          <div class="head-stat">
+            <div class="head-label">Niveau de preuve</div>
+            <el-tag :type="proofType" size="small">{{ proofLevel }}</el-tag>
+          </div>
+          <div class="head-stat">
+            <div class="head-label">Entrées mémoire</div>
+            <div class="head-value">{{ detail.memory_entries }}</div>
+          </div>
+        </div>
+
+        <el-tabs v-model="activeTab" class="detail-tabs">
+          <el-tab-pane label="Profil" name="profil">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Code</span><span class="v mono">{{ detail.code }}</span></p>
+              <p class="kv"><span class="k">Stratégie</span><span class="v">{{ detail.strategy }}</span></p>
+              <p class="kv"><span class="k">Type de pari</span><span class="v">{{ detail.bet_type }}</span></p>
+              <p class="kv"><span class="k">Mission</span><span class="v">{{ detail.mission }}</span></p>
+              <p class="kv"><span class="k">Spécialités</span><span class="v">{{ (detail.specialties || []).join(', ') }}</span></p>
+              <p class="kv"><span class="k">Méthodes</span><span class="v">{{ (detail.preferred_methods || []).join(', ') }}</span></p>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Mémoire" name="memoire">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Entrées mémoire</span><span class="v">{{ detail.memory_entries }}</span></p>
+              <p class="kv"><span class="k">Tirages évalués</span><span class="v">{{ detail.evaluated_draws }}</span></p>
+              <el-alert type="info" :closable="false" show-icon
+                title="Mémoire walk-forward (historique strict, append-only par construction)" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Stratégies" name="strategies">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Stratégie active</span><span class="v">{{ detail.strategy }}</span></p>
+              <p class="kv"><span class="k">Type de pari</span><span class="v">{{ detail.bet_type }}</span></p>
+              <p class="kv"><span class="k">Méthodes préférées</span><span class="v">{{ (detail.preferred_methods || []).join(', ') }}</span></p>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Expériences" name="experiences">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Paris (expériences)</span><span class="v">{{ detail.bets }}</span></p>
+              <p class="kv"><span class="k">Gains</span><span class="v">{{ detail.wins }}</span></p>
+              <p class="kv"><span class="k">Hits moyens</span><span class="v">{{ detail.hits_mean }}</span></p>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Paris" name="paris">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Nombre de paris</span><span class="v">{{ detail.bets }}</span></p>
+              <p class="kv"><span class="k">Paris gagnants</span><span class="v text-green">{{ detail.wins }}</span></p>
+              <p class="kv"><span class="k">Taux de réussite</span><span class="v">{{ (detail.win_rate * 100).toFixed(1) }}%</span></p>
+              <p class="kv"><span class="k">Hits moyen / tirage</span><span class="v">{{ detail.hits_mean }} (hasard ≈ 0,278)</span></p>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Capital et risque" name="capital">
+            <div class="tab-block">
+              <p class="kv"><span class="k">Capital initial</span><span class="v">{{ fmtF(detail.initial_capital) }} F</span></p>
+              <p class="kv"><span class="k">Capital actuel</span><span class="v">{{ fmtF(detail.capital) }} F</span></p>
+              <p class="kv"><span class="k">Profit net</span><span class="v" :class="detail.profit_net >= 0 ? 'text-green' : 'text-red'">{{ fmtF(detail.profit_net) }} F</span></p>
+              <p class="kv"><span class="k">Drawdown max</span><span class="v text-red">{{ detail.max_drawdown_pct }}%</span></p>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="Historique des versions" name="versions">
+            <div class="tab-block">
+              <el-timeline>
+                <el-timeline-item
+                  v-for="(v, i) in detail.version_history"
+                  :key="i"
+                  :timestamp="`version ${i + 1}`"
+                  type="primary"
+                >{{ v }}</el-timeline-item>
+              </el-timeline>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -178,6 +282,47 @@ const paged = computed(() => {
 function isWin(n: number) {
   return (data.value?.last_draw_numbers || []).includes(n)
 }
+
+const drawerVisible = ref(false)
+const detail = ref<any>(null)
+const detailLoading = ref(false)
+const detailErr = ref('')
+const activeTab = ref('profil')
+
+async function openDetail(row: any) {
+  drawerVisible.value = true
+  detail.value = null
+  detailLoading.value = true
+  detailErr.value = ''
+  activeTab.value = 'profil'
+  try {
+    const path = `/api/fusion/agent-detail?code=${encodeURIComponent(row.code)}`
+      + (drawType.value ? `&draw_type=${encodeURIComponent(drawType.value)}` : '')
+    const res = await api.get(path)
+    detail.value = res.data
+  } catch (e: any) {
+    detailErr.value = e.response?.data?.error || e.message || 'erreur réseau'
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function fmtF(v: number) {
+  return (v ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+const proofLevel = computed(() => {
+  if (!detail.value) return '—'
+  if (detail.value.bets < 50) return 'En test'
+  if (detail.value.profit_net > 0) return 'Prometteur'
+  return 'Non établi'
+})
+
+const proofType = computed(() => {
+  if (proofLevel.value === 'Prometteur') return 'warning'
+  if (proofLevel.value === 'En test') return 'info'
+  return 'danger'
+})
 </script>
 
 <style scoped>
@@ -290,5 +435,61 @@ function isWin(n: number) {
 }
 .mono {
   font-family: monospace;
+}
+.text-green {
+  color: #67c23a;
+}
+.text-red {
+  color: #f56c6c;
+}
+.drawer-content {
+  padding: 0 8px;
+}
+.drawer-loading,
+.drawer-error {
+  padding: 16px;
+}
+.detail-head {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.head-stat {
+  background: var(--bg-alt);
+  padding: 12px;
+  border-radius: 8px;
+}
+.head-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.head-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+.detail-tabs {
+  margin-top: 8px;
+}
+.tab-block {
+  padding: 8px 0;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+.kv .k {
+  color: var(--muted);
+  font-size: 13px;
+}
+.kv .v {
+  font-weight: 500;
+  font-size: 13px;
+  text-align: right;
 }
 </style>

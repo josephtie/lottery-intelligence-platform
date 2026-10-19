@@ -1160,6 +1160,57 @@ class ApiHandler(BaseHTTPRequestHandler):
             "agents": decisions,
         }
 
+    def _fusion_agent_detail(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Walk-forward detail (capital, profit, bets, versions) for ONE agent."""
+        from collections import OrderedDict
+        import random as _random
+
+        from lottery_intelligence_platform import fusion_agents as fa
+
+        code = (qs.get("code") or [None])[0]
+        draw_type = (qs.get("draw_type") or [None])[0]
+        window = min(int((qs.get("window") or ["20"])[0]), 100)
+        profile = fa.get_profile(code) if code else None
+        if profile is None:
+            return {"error": f"unknown agent code: {code}"}
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    "SELECT draw_type_id, display_name FROM catalog.draw_types "
+                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    "SELECT dt.draw_type_id, dt.display_name FROM catalog.draw_types dt "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = dt.draw_type_id) DESC LIMIT 1",
+                ).fetchone()
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            draw_type_id, display_name = dt
+            rows = conn.execute(
+                """SELECT d.scheduled_date, d.scheduled_sequence, n.number
+                   FROM core.draws d
+                   JOIN core.draw_versions v
+                     ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n
+                     ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                   WHERE d.draw_type_id = %s AND d.status = 'SETTLED'
+                   ORDER BY d.scheduled_date, d.scheduled_sequence, n.position""",
+                (draw_type_id,),
+            ).fetchall()
+        draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
+        for d, seq, num in rows:
+            draws.setdefault((d, seq), []).append(num)
+        history = [sorted(nums) for nums in draws.values()]
+
+        rng = _random.Random(len(history))
+        detail = fa.walkforward_detail(profile, history, window=window, rng=rng)
+        detail["draw_type"] = display_name
+        detail["n_draws"] = len(history)
+        return detail
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if not url.path.startswith("/api"):
@@ -1275,6 +1326,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/fusion/agents":
                 self._send(self._fusion_agents(parse_qs(url.query)))
+                return
+            if url.path == "/api/fusion/agent-detail":
+                self._send(self._fusion_agent_detail(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

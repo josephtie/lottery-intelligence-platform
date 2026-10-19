@@ -55,3 +55,13 @@ def test_settle_bet_2n_boundaries():
 def test_bet_type_assigned():
     assert fa.get_profile("fusion_frequentist").bet_type == "2N"
     assert fa.get_profile("fusion_evolver").bet_type == "CHANCE_5_PLUS"
+
+
+def test_walkforward_detail_structure():
+    history = _history(n=60)
+    d = fa.walkforward_detail(fa.get_profile("fusion_synergist"), history, window=15)
+    assert d["bets"] == 15
+    assert d["initial_capital"] == 100000.0
+    assert "capital" in d and "profit_net" in d and "version_history" in d
+    assert d["win_rate"] == 0.0  # 5N ne gagne jamais sur 15 tirages
+    assert 0.0 <= d["hits_mean"] <= 5.0

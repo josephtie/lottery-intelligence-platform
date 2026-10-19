@@ -146,7 +146,7 @@ def _decide_complementary(picks, history, rng):
     return fe.generate_n_combination(picks, history, K)
 
 
-def _decide_evolver(picks, history, rng, window=15):
+def _decide_evolver(picks, history, rng, window=10):
     """Fusion pondérée par la performance récente (walk-forward) de chaque modèle."""
     from collections import Counter
     weights = {}
@@ -270,3 +270,69 @@ def settle_bet(bet_type: str, numbers: Sequence[int], winning: Sequence[int],
         return calculate_potential_gain(bet_type, sel, list(winning), stake)
     except Exception:
         return {"status": "ERR", "tier": None, "net_profit": Decimal("0"), "roi": Decimal("0")}
+
+
+INITIAL_CAPITAL = Decimal("100000.00")
+
+
+def _version_history(profile: FusionAgentProfile, reasoning: str) -> list[str]:
+    if profile.strategy == "adaptive":
+        import re
+        m = re.search(r"(\d+) bascule", reasoning)
+        n = int(m.group(1)) if m else 0
+        return [f"v{i + 1} — stratégie réévaluée" for i in range(n + 1)] or ["v1 — sélecteur initialisé"]
+    if profile.strategy == "evolver":
+        return ["v1 — poids uniformes", "v2 — poids réajustés sur la fenêtre récente (walk-forward)"]
+    return [f"v1 — stratégie '{profile.strategy}'"]
+
+
+def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[int]],
+                       *, window: int = 20, rng: random.Random | None = None) -> dict:
+    """Virtual capital, net profit, bets, hits and version history over a
+    strict walk-forward window (each draw decided from past history only).
+    """
+    rng = rng or random.Random(0)
+    capital = INITIAL_CAPITAL
+    profit = Decimal("0.00")
+    bets = wins = 0
+    hits: list[int] = []
+    peak = capital
+    max_dd = Decimal("0.00")
+    last_reasoning = ""
+    start = max(1, len(history) - window)
+    for i in range(start, len(history)):
+        past = history[:i]
+        winning = history[i]
+        d = decide(profile, past, rng, k=K)
+        h = fe.hit_count(d["selected_numbers"], winning)
+        hits.append(h)
+        net = settle_bet(d["bet_type"], d["selected_numbers"], winning, d["stake_amount"])["net_profit"]
+        capital += net
+        profit += net
+        bets += 1
+        if net > 0:
+            wins += 1
+        peak = max(peak, capital)
+        dd = (peak - capital) / peak if peak else Decimal("0")
+        max_dd = max(max_dd, dd)
+        last_reasoning = d["reasoning"]
+    return {
+        "code": profile.code,
+        "display_name": profile.display_name,
+        "strategy": profile.strategy,
+        "bet_type": profile.bet_type,
+        "mission": profile.mission,
+        "specialties": profile.specialties,
+        "preferred_methods": profile.preferred_methods,
+        "initial_capital": float(INITIAL_CAPITAL),
+        "capital": float(capital),
+        "profit_net": float(profit),
+        "bets": bets,
+        "wins": wins,
+        "win_rate": round(wins / bets, 4) if bets else 0.0,
+        "hits_mean": round(sum(hits) / len(hits), 4) if hits else 0.0,
+        "max_drawdown_pct": round(float(max_dd * 100), 2),
+        "evaluated_draws": bets,
+        "memory_entries": bets,
+        "version_history": _version_history(profile, last_reasoning),
+    }
