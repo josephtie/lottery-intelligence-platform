@@ -32,6 +32,7 @@ class FusionAgentProfile:
     specialties: list[str]
     preferred_methods: list[str]
     strategy: str  # clé de décision (voir _deciders)
+    bet_type: str = "5N"  # formule de pari officielle (1N..5N, CHANCE_5_PLUS, PERM_2)
 
 
 FUSION_AGENT_PROFILES: tuple[FusionAgentProfile, ...] = (
@@ -74,6 +75,7 @@ FUSION_AGENT_PROFILES: tuple[FusionAgentProfile, ...] = (
         specialties=["fréquence"],
         preferred_methods=["frequency"],
         strategy="frequency",
+        bet_type="2N",
     ),
     FusionAgentProfile(
         code="fusion_complementarist",
@@ -82,6 +84,16 @@ FUSION_AGENT_PROFILES: tuple[FusionAgentProfile, ...] = (
         specialties=["fusion", "complémentarité"],
         preferred_methods=["complementary"],
         strategy="complementary",
+        bet_type="5N",
+    ),
+    FusionAgentProfile(
+        code="fusion_evolver",
+        display_name="L'Évolueur",
+        mission="Fusionner les modèles en pondérant par leur performance récente (poids évolutifs).",
+        specialties=["fusion", "évolution", "pondération adaptative"],
+        preferred_methods=["evolver"],
+        strategy="evolver",
+        bet_type="CHANCE_5_PLUS",
     ),
     FusionAgentProfile(
         code="fusion_random",
@@ -134,6 +146,28 @@ def _decide_complementary(picks, history, rng):
     return fe.generate_n_combination(picks, history, K)
 
 
+def _decide_evolver(picks, history, rng, window=15):
+    """Fusion pondérée par la performance récente (walk-forward) de chaque modèle."""
+    from collections import Counter
+    weights = {}
+    start = max(1, len(history) - window)
+    for code in picks:
+        hits = total = 0
+        for i in range(start, len(history)):
+            past = history[:i]
+            win = set(history[i])
+            p = fe.FUSION_MODELS[code](past, rng, K)
+            hits += fe.hit_count(p, win)
+            total += 1
+        weights[code] = (hits / total) if total else 0.0
+    counts = Counter()
+    for code, p in picks.items():
+        w = weights.get(code, 0.0)
+        for n in p:
+            counts[n] += w
+    return [n for n, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))][:K]
+
+
 def _decide_random(picks, history, rng):
     return rng.sample(range(1, 91), K)
 
@@ -144,6 +178,7 @@ _DECIDERS: dict[str, Callable] = {
     "borda": _decide_borda,
     "frequency": _decide_frequency,
     "complementary": _decide_complementary,
+    "evolver": _decide_evolver,
     "random": _decide_random,
 }
 
@@ -200,6 +235,7 @@ def decide(
         "code": profile.code,
         "display_name": profile.display_name,
         "strategy": profile.strategy,
+        "bet_type": profile.bet_type,
         "selected_numbers": list(combo),
         "stake_amount": stake,
         "reasoning": reasoning,
@@ -212,3 +248,25 @@ def get_profile(code: str) -> FusionAgentProfile | None:
         if p.code == code:
             return p
     return None
+
+
+BET_NUMBERS: dict[str, int] = {
+    "1N": 1, "2N": 2, "3N": 3, "4N": 4, "5N": 5,
+    "CHANCE_5_PLUS": 5, "PERM_2": 5,
+}
+
+
+def settle_bet(bet_type: str, numbers: Sequence[int], winning: Sequence[int],
+               stake: Decimal) -> dict:
+    """Settle one bet against a draw via the official payout rules.
+
+    Returns ``calculate_potential_gain`` result (status, tier, net_profit, roi).
+    For a kN bet only the first k numbers are used (the agent's top pick).
+    """
+    from lottery_intelligence_platform.betting_formulas import calculate_potential_gain
+    n = BET_NUMBERS.get(bet_type, 5)
+    sel = list(numbers)[:n]
+    try:
+        return calculate_potential_gain(bet_type, sel, list(winning), stake)
+    except Exception:
+        return {"status": "ERR", "tier": None, "net_profit": Decimal("0"), "roi": Decimal("0")}

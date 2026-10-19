@@ -1126,21 +1126,39 @@ class ApiHandler(BaseHTTPRequestHandler):
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
         history = [sorted(nums) for nums in draws.values()]
+        draw_dates = [str(k[0]) for k in draws.keys()]
+
+        # walk-forward strict : l'agent décide avec l'historique SANS le dernier
+        # tirage, puis on rejoue ce dernier tirage pour afficher le résultat.
+        past = history[:-1] if len(history) > 1 else history
+        last_draw = history[-1] if history else []
+        last_draw_date = draw_dates[-1] if draw_dates else None
 
         rng = _random.Random(len(history))
         decisions = []
         for profile in fa.FUSION_AGENT_PROFILES:
-            d = fa.decide(profile, history, rng, k=5)
+            d = fa.decide(profile, past, rng, k=5)
+            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw, d["stake_amount"])
             decisions.append({
                 "code": d["code"],
                 "display_name": d["display_name"],
                 "strategy": d["strategy"],
+                "bet_type": d["bet_type"],
                 "selected_numbers": d["selected_numbers"],
                 "stake_amount": str(d["stake_amount"]),
                 "confidence_score": d["confidence_score"],
                 "reasoning": d["reasoning"],
+                "hits_last": len(set(d["selected_numbers"]) & set(last_draw)),
+                "outcome_last": settle.get("status"),
+                "net_result_last": float(settle.get("net_profit", 0)),
             })
-        return {"draw_type": display_name, "n_draws": len(history), "agents": decisions}
+        return {
+            "draw_type": display_name,
+            "n_draws": len(history),
+            "last_draw_date": last_draw_date,
+            "last_draw_numbers": last_draw,
+            "agents": decisions,
+        }
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)

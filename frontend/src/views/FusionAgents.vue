@@ -40,8 +40,13 @@
 
     <div v-if="data" class="meta-line">
       <span class="meta-chip">Jeu : <b>{{ data.draw_type }}</b></span>
-      <span class="meta-chip">{{ data.n_draws }} tirages réglés (historique strict)</span>
+      <span class="meta-chip">{{ data.n_draws }} tirages réglés</span>
       <span class="meta-chip">{{ data.agents?.length }} agents</span>
+      <span class="meta-chip">Dernier tirage : <b>{{ data.last_draw_date }}</b></span>
+    </div>
+    <div v-if="data?.last_draw_numbers?.length" class="draw-line">
+      <span class="draw-label">Numéros gagnants du dernier tirage :</span>
+      <span v-for="n in data.last_draw_numbers" :key="n" class="number-ball win">{{ n }}</span>
     </div>
 
     <el-table :data="paged" stripe style="width: 100%">
@@ -58,10 +63,26 @@
           <el-tag size="small" type="info">{{ row.strategy }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="bet_type" label="Type de pari" width="120">
+        <template #default="{ row }">
+          <el-tag size="small" type="warning">{{ row.bet_type }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="Numéros proposés" min-width="240">
         <template #default="{ row }">
           <div class="numbers-cell">
-            <span v-for="n in row.selected_numbers" :key="n" class="number-ball">{{ n }}</span>
+            <span v-for="n in row.selected_numbers" :key="n"
+                  class="number-ball" :class="{ win: isWin(n) }">{{ n }}</span>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="Résultat (dernier tirage)" width="180">
+        <template #default="{ row }">
+          <div class="result-cell">
+            <span class="hits">{{ row.hits_last }}/5</span>
+            <span :class="row.net_result_last > 0 ? 'net-win' : 'net-loss'">
+              {{ row.net_result_last > 0 ? '+' : '' }}{{ row.net_result_last }} F
+            </span>
           </div>
         </template>
       </el-table-column>
@@ -153,6 +174,10 @@ const paged = computed(() => {
   const start = (page.value - 1) * perPage.value
   return filtered.value.slice(start, start + perPage.value)
 })
+
+function isWin(n: number) {
+  return (data.value?.last_draw_numbers || []).includes(n)
+}
 </script>
 
 <style scoped>
@@ -227,6 +252,37 @@ const paged = computed(() => {
   color: white;
   font-weight: 600;
   font-size: 13px;
+}
+.number-ball.win {
+  background: #67c23a;
+}
+.draw-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.draw-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.result-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hits {
+  font-size: 12px;
+  color: var(--muted);
+}
+.net-win {
+  color: #67c23a;
+  font-weight: 600;
+}
+.net-loss {
+  color: #f56c6c;
 }
 .reasoning {
   font-size: 12px;

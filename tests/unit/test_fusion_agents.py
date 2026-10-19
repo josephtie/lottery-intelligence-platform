@@ -41,3 +41,17 @@ def test_random_baseline_is_uniform():
     history = _history()
     d = fa.decide(fa.get_profile("fusion_random"), history, random.Random(5))
     assert len(d["selected_numbers"]) == 5
+
+
+def test_settle_bet_2n_boundaries():
+    from decimal import Decimal
+    # 2N (cote 240) : 2 matchs exacts -> gain 23900 ; 1 match -> perte
+    win = fa.settle_bet("2N", [5, 10, 20, 30, 40], [5, 10, 90, 89, 88], Decimal("100"))
+    assert win["status"] == "WIN" and win["net_profit"] == Decimal("23900")
+    lose = fa.settle_bet("2N", [5, 11, 20, 30, 40], [5, 10, 90, 89, 88], Decimal("100"))
+    assert lose["status"] == "LOSE" and lose["net_profit"] == Decimal("-100")
+
+
+def test_bet_type_assigned():
+    assert fa.get_profile("fusion_frequentist").bet_type == "2N"
+    assert fa.get_profile("fusion_evolver").bet_type == "CHANCE_5_PLUS"
