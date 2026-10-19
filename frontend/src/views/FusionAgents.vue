@@ -193,6 +193,23 @@
               <p class="kv"><span class="k">Taux de réussite</span><span class="v">{{ (detail.win_rate * 100).toFixed(1) }}%</span></p>
               <p class="kv"><span class="k">Hits moyen / tirage</span><span class="v">{{ detail.hits_mean }} (hasard ≈ 0,278)</span></p>
             </div>
+            <div class="bets-list">
+              <div v-for="(b, i) in detail.bets_history" :key="i" class="bet-row">
+                <div class="bet-line">
+                  <span class="bet-date">{{ b.date || '—' }}</span>
+                  <el-tag size="small" type="warning">{{ b.bet_type }}</el-tag>
+                  <span class="bet-stake mono">mise {{ b.stake }} F</span>
+                  <span :class="b.net > 0 ? 'text-green' : 'text-red'">{{ b.net > 0 ? '+' : '' }}{{ b.net }} F</span>
+                  <el-tag size="small" :type="b.outcome === 'WIN' ? 'success' : 'info'">{{ b.outcome }}</el-tag>
+                  <span class="bet-capital mono">capital {{ fmtF(b.capital_after) }} F</span>
+                </div>
+                <div class="bet-numbers">
+                  <span class="bet-nums-label">joué :</span>
+                  <span v-for="n in b.selected_numbers" :key="n" class="mini-ball"
+                        :class="{ win: (b.winning_numbers || []).includes(n) }">{{ n }}</span>
+                </div>
+              </div>
+            </div>
           </el-tab-pane>
           <el-tab-pane label="Capital et risque" name="capital">
             <div class="tab-block">
@@ -491,5 +508,58 @@ const proofType = computed(() => {
   font-weight: 500;
   font-size: 13px;
   text-align: right;
+}
+.bets-list {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.bet-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bet-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.bet-date {
+  color: var(--muted);
+  min-width: 80px;
+}
+.bet-stake {
+  color: var(--muted);
+}
+.bet-capital {
+  color: var(--muted);
+  margin-left: auto;
+}
+.bet-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.bet-nums-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.mini-ball {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+.mini-ball.win {
+  background: #67c23a;
 }
 </style>

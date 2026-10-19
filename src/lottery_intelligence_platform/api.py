@@ -1204,9 +1204,10 @@ class ApiHandler(BaseHTTPRequestHandler):
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
         history = [sorted(nums) for nums in draws.values()]
+        draw_dates = [str(k[0]) for k in draws.keys()]
 
         rng = _random.Random(len(history))
-        detail = fa.walkforward_detail(profile, history, window=window, rng=rng)
+        detail = fa.walkforward_detail(profile, history, window=window, rng=rng, dates=draw_dates)
         detail["draw_type"] = display_name
         detail["n_draws"] = len(history)
         return detail

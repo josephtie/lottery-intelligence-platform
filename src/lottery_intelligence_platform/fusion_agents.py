@@ -287,9 +287,12 @@ def _version_history(profile: FusionAgentProfile, reasoning: str) -> list[str]:
 
 
 def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[int]],
-                       *, window: int = 20, rng: random.Random | None = None) -> dict:
+                       *, window: int = 20, rng: random.Random | None = None,
+                       dates: Sequence | None = None) -> dict:
     """Virtual capital, net profit, bets, hits and version history over a
     strict walk-forward window (each draw decided from past history only).
+    Each bet carries a bet_type and a stake; the capital is credited/debited
+    per bet outcome.
     """
     rng = rng or random.Random(0)
     capital = INITIAL_CAPITAL
@@ -299,6 +302,7 @@ def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[i
     peak = capital
     max_dd = Decimal("0.00")
     last_reasoning = ""
+    bets_history: list[dict] = []
     start = max(1, len(history) - window)
     for i in range(start, len(history)):
         past = history[:i]
@@ -306,7 +310,8 @@ def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[i
         d = decide(profile, past, rng, k=K)
         h = fe.hit_count(d["selected_numbers"], winning)
         hits.append(h)
-        net = settle_bet(d["bet_type"], d["selected_numbers"], winning, d["stake_amount"])["net_profit"]
+        settle = settle_bet(d["bet_type"], d["selected_numbers"], winning, d["stake_amount"])
+        net = settle["net_profit"]
         capital += net
         profit += net
         bets += 1
@@ -316,6 +321,17 @@ def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[i
         dd = (peak - capital) / peak if peak else Decimal("0")
         max_dd = max(max_dd, dd)
         last_reasoning = d["reasoning"]
+        bets_history.append({
+            "date": str(dates[i]) if dates else None,
+            "bet_type": d["bet_type"],
+            "stake": float(d["stake_amount"]),
+            "selected_numbers": d["selected_numbers"],
+            "winning_numbers": list(winning),
+            "hits": h,
+            "outcome": settle.get("status"),
+            "net": float(net),
+            "capital_after": float(capital),
+        })
     return {
         "code": profile.code,
         "display_name": profile.display_name,
@@ -334,5 +350,6 @@ def walkforward_detail(profile: FusionAgentProfile, history: Sequence[Sequence[i
         "max_drawdown_pct": round(float(max_dd * 100), 2),
         "evaluated_draws": bets,
         "memory_entries": bets,
+        "bets_history": bets_history,
         "version_history": _version_history(profile, last_reasoning),
     }
