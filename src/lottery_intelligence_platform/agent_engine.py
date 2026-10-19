@@ -233,7 +233,7 @@ def get_agent(connection: Any, agent_id: UUID | str) -> Agent | None:
         objectives=list(row[7]),
         preferred_methods=list(row[8]),
         operational_level=row[9],
-        preferences=dict(row[10]),
+        autonomy_config=dict(row[10]),
         created_at=row[11],
         updated_at=row[12],
     )
@@ -590,7 +590,7 @@ def list_active_agents(connection: Any) -> list[Agent]:
             objectives=list(row[7]),
             preferred_methods=list(row[8]),
             operational_level=row[9],
-            preferences=dict(row[10]),
+            autonomy_config=dict(row[10]),
             created_at=row[11],
             updated_at=row[12],
         )

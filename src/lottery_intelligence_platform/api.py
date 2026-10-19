@@ -1152,6 +1152,23 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "outcome_last": settle.get("status"),
                 "net_result_last": float(settle.get("net_profit", 0)),
             })
+        # capital virtuel persisté (edge_lab) si les agents ont été backfillés
+        try:
+            with psycopg.connect(self.dsn, autocommit=True) as conn2:
+                cap_rows = conn2.execute(
+                    "SELECT a.code, c.current_capital, c.net_profit, c.total_bets, "
+                    "c.winning_bets, c.roi FROM edge_lab.agents a "
+                    "JOIN edge_lab.agent_capital c ON c.agent_id = a.agent_id"
+                ).fetchall()
+        except Exception:
+            cap_rows = []
+        cap = {r[0]: {"persisted_capital": float(r[1]), "persisted_profit": float(r[2]),
+                      "persisted_bets": r[3], "persisted_wins": r[4],
+                      "persisted_roi": float(r[5]) if r[5] is not None else None}
+               for r in cap_rows}
+        for dec in decisions:
+            if dec["code"] in cap:
+                dec.update(cap[dec["code"]])
         return {
             "draw_type": display_name,
             "n_draws": len(history),
