@@ -367,6 +367,64 @@ ROUTES: dict[str, str] = {
         ORDER BY ck.validation_count DESC, ck.updated_at DESC
         LIMIT 50
     """,
+    # DIGITAL ROOT ANALYZER ENDPOINTS
+    "/api/digital-root/relations": """
+        SELECT relation_id, relation_type, source_root, target_root,
+               status, discovery_date, total_observations, successful_predictions,
+               current_success_rate, baseline_success_rate,
+               observation_window_days, statistical_significance
+        FROM research.digital_root_relations
+        WHERE status IN ('OBSERVING', 'CONFIRMED_TEMPORARY')
+        ORDER BY current_success_rate DESC, discovery_date DESC
+        LIMIT 100
+    """,
+    "/api/digital-root/relations/history": """
+        SELECT relation_id, relation_type, source_root, target_root,
+               status, discovery_date, total_observations, successful_predictions,
+               current_success_rate, last_validation_date
+        FROM research.digital_root_relations
+        ORDER BY discovery_date DESC
+        LIMIT 200
+    """,
+    "/api/digital-root/predictions": """
+        SELECT p.prediction_id, p.draw_id, p.draw_type_id, p.scheduled_date,
+               p.predicted_roots, p.turbo_variant, p.predicted_numbers,
+               p.used_relations_count, p.winning_numbers, p.hit_count,
+               p.turbo_hit, p.stake, p.payout, p.net_profit, p.roi,
+               p.created_at, p.settled_at
+        FROM research.digital_root_predictions p
+        ORDER BY p.created_at DESC
+        LIMIT 100
+    """,
+    "/api/digital-root/validation": """
+        SELECT validation_id, draw_type_id, start_date, end_date,
+               training_window_days, test_window_days, turbo_variant,
+               total_predictions, total_hits, hit_rate,
+               turbo_hits, turbo_hit_rate, total_stake, total_payout,
+               total_net_profit, average_roi,
+               baseline_hit_rate, baseline_turbo_hit_rate, baseline_roi,
+               hit_rate_improvement_percent, turbo_improvement_percent,
+               roi_improvement, statistically_significant
+        FROM research.digital_root_validation
+        ORDER BY created_at DESC
+        LIMIT 50
+    """,
+    "/api/digital-root/summary": """
+        SELECT
+          (SELECT COUNT(*) FROM research.digital_root_relations
+           WHERE status IN ('OBSERVING', 'CONFIRMED_TEMPORARY')) AS active_relations,
+          (SELECT COUNT(*) FROM research.digital_root_relations
+           WHERE status = 'CANDIDATE') AS candidate_relations,
+          (SELECT COUNT(*) FROM research.digital_root_relations
+           WHERE status = 'EXPIRED') AS expired_relations,
+          (SELECT COUNT(*) FROM research.digital_root_predictions) AS total_predictions,
+          (SELECT COUNT(*) FROM research.digital_root_predictions
+           WHERE settled_at IS NOT NULL) AS settled_predictions,
+          (SELECT AVG(turbo_hit)::FLOAT FROM research.digital_root_predictions
+           WHERE settled_at IS NOT NULL) AS avg_turbo_hit_rate,
+          (SELECT AVG(roi)::FLOAT FROM research.digital_root_predictions
+           WHERE settled_at IS NOT NULL) AS avg_roi
+    """,
 }
 
 

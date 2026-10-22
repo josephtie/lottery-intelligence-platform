@@ -301,6 +301,10 @@ def _history(
 
 from lottery_intelligence_platform import (calling_image, lab_models,
                                            meta_ensemble)
+from lottery_intelligence_platform.digital_root_picker import (
+    pick_digital_root_turbo,
+    pick_digital_root_turbo_v2,
+)
 
 # Hist-functions available to cohort pickers: the ported lab models plus the
 # CALLING_IMAGE and META_ENSEMBLE families (same (hist, rng, k) interface).
@@ -371,6 +375,8 @@ PICKERS: dict[str, Callable[[Any, UUID, date, Mapping[str, Any], int | None], li
     "calling_image_position": pick_calling_image_position,
     "meta_consensus_count": pick_meta_consensus_count,
     "meta_consensus_family": pick_meta_consensus_family,
+    "digital_root_turbo": pick_digital_root_turbo,
+    "digital_root_turbo_v2": pick_digital_root_turbo_v2,
 }
 
 LAB_GENERATOR_CODES: tuple[str, ...] = tuple(
@@ -398,6 +404,9 @@ LAB_MODEL_FAMILIES: dict[str, str] = {
     # Meta-ensemble: deterministic consensus over the lab pickers.
     "meta_consensus_count": "ENSEMBLE",
     "meta_consensus_family": "ENSEMBLE",
+    # Digital Root Turbo: temporary relation-based predictions
+    "digital_root_turbo": "PREDICTIVE",
+    "digital_root_turbo_v2": "PREDICTIVE",
 }
 _STOCHASTIC_CODES = {"random", "bayesian_v1", "monte_carlo_v1"}
 CALLING_IMAGE_CODES = frozenset(calling_image.CALLING_IMAGE_MODELS)
