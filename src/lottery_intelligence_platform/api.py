@@ -26,6 +26,7 @@ import psycopg
 
 from lottery_intelligence_platform import (
     calling_image,
+    digital_root_statistics,
     game_temporal,
     lab_matrix,
     meta_ensemble,
@@ -714,6 +715,42 @@ class ApiHandler(BaseHTTPRequestHandler):
             "top_pairs": pairs,
         }
 
+    def _digital_root_statistics(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Digital root descriptive statistics (10/30/45/60/90 days) for one game."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        ref_str = (qs.get("reference_date") or [None])[0]
+        if ref_str:
+            try:
+                reference = date.fromisoformat(ref_str)
+            except ValueError:
+                return {"error": f"invalid reference_date: {ref_str}"}
+        else:
+            reference = date.today()
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       WHERE dt.code = %s OR dt.display_name = %s
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                    (draw_type, draw_type),
+                ).fetchone()
+                if dt_row is None:
+                    return {"error": f"unknown draw_type: {draw_type}"}
+            else:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+            draw_type_id, display_name = dt_row
+            return digital_root_statistics.compute_digital_root_statistics(
+                conn, draw_type_id, display_name, reference)
+
     def _lab_structure(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """M04 + M05 + M06: null reference, serial dependence, change point
         for one draw type, computed on VALID draws in chronological order."""
@@ -1378,6 +1415,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/statistics":
                 self._send(self._statistics(parse_qs(url.query)))
+                return
+            if url.path == "/api/digital-root-statistics":
+                self._send(self._digital_root_statistics(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/structure":
                 self._send(self._lab_structure(parse_qs(url.query)))
