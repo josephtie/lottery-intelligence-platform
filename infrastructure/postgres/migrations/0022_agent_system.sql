@@ -3,6 +3,8 @@
 -- This migration creates the database schema for ten autonomous agents
 -- with individual persistent memory, virtual capital, and decision-making capabilities.
 
+CREATE SCHEMA IF NOT EXISTS edge_lab;
+
 -- ============================================================================
 -- 1. AGENT IDENTITY AND CONFIGURATION
 -- ============================================================================
@@ -99,7 +101,7 @@ CREATE TABLE edge_lab.memory_hypotheses (
     confidence_level NUMERIC(5,4) CHECK (confidence_level BETWEEN 0 AND 1),
     origin TEXT NOT NULL DEFAULT 'SELF' CHECK (origin IN ('SELF', 'COLLECTIVE', 'EXTERNAL')),
     origin_agent_id UUID REFERENCES edge_lab.agents(agent_id),
-    origin_knowledge_id UUID REFERENCES edge_lab.collective_knowledge(knowledge_id),
+    origin_knowledge_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (length(trim(code)) > 0),
@@ -380,7 +382,7 @@ CREATE TABLE edge_lab.collective_knowledge (
     evidence JSONB NOT NULL DEFAULT '{}'::JSONB,
     proof_level TEXT NOT NULL DEFAULT 'UNVERIFIED' CHECK (proof_level IN ('UNVERIFIED', 'REPRODUCED', 'VALIDATED', 'CONFIRMED')),
     originating_agent_id UUID NOT NULL REFERENCES edge_lab.agents(agent_id),
-    originating_experiment_id UUID REFERENCES edge_lab.memory_experiments(experiment_id),
+    originating_experiment_id UUID,
     version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
     parent_knowledge_id UUID REFERENCES edge_lab.collective_knowledge(knowledge_id),
     validation_count INTEGER NOT NULL DEFAULT 0 CHECK (validation_count >= 0),
@@ -552,7 +554,7 @@ SELECT
     (SELECT COUNT(*) FROM edge_lab.memory_hypotheses WHERE agent_id = a.agent_id) AS hypotheses_count,
     (SELECT COUNT(*) FROM edge_lab.memory_successes WHERE agent_id = a.agent_id) AS successes_count,
     (SELECT COUNT(*) FROM edge_lab.memory_failures WHERE agent_id = a.agent_id) AS failures_count,
-    (SELECT COUNT(*) FROM edge_lab.agent_reflections WHERE agent_id = a.agent_id AND reflection_type = 'POST_SETTLEMENT' ORDER BY created_at DESC LIMIT 1) AS last_reflection,
+    (SELECT content FROM edge_lab.agent_reflections WHERE agent_id = a.agent_id AND reflection_type = 'POST_SETTLEMENT' ORDER BY created_at DESC LIMIT 1) AS last_reflection,
     a.created_at AS agent_created_at,
     ac.last_updated_at AS capital_updated_at
 FROM edge_lab.agents a
@@ -566,15 +568,15 @@ SELECT
     dt.display_name AS draw_type,
     COUNT(ad.decision_id) AS total_decisions,
     COUNT(CASE WHEN ad.decision_type = 'BET' THEN 1 END) AS total_bets,
-    COUNT(CASE WHEN do.outcome_type = 'WIN' THEN 1 END) AS winning_bets,
-    SUM(CASE WHEN do.outcome_type = 'WIN' THEN do.net_result ELSE 0 END) AS total_profit,
-    SUM(CASE WHEN do.outcome_type = 'LOSS' THEN do.net_result ELSE 0 END) AS total_loss,
-    SUM(do.net_result) AS net_profit,
+    COUNT(CASE WHEN o.outcome_type = 'WIN' THEN 1 END) AS winning_bets,
+    SUM(CASE WHEN o.outcome_type = 'WIN' THEN o.net_result ELSE 0 END) AS total_profit,
+    SUM(CASE WHEN o.outcome_type = 'LOSS' THEN o.net_result ELSE 0 END) AS total_loss,
+    SUM(o.net_result) AS net_profit,
     AVG(CASE WHEN ad.decision_type = 'BET' THEN ad.stake_amount END) AS avg_stake
 FROM edge_lab.agents a
 JOIN edge_lab.agent_decisions ad ON ad.agent_id = a.agent_id
 JOIN catalog.draw_types dt ON dt.draw_type_id = ad.draw_type_id
-LEFT JOIN edge_lab.decision_outcomes do ON do.decision_id = ad.decision_id
+LEFT JOIN edge_lab.decision_outcomes o ON o.decision_id = ad.decision_id
 GROUP BY a.agent_id, a.code, dt.display_name;
 
 -- Agent memory compartment summary
