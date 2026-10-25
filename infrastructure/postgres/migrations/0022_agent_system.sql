@@ -299,7 +299,7 @@ CREATE TABLE edge_lab.agent_capital (
     total_profit NUMERIC(15,2) NOT NULL DEFAULT 0.00,
     total_loss NUMERIC(15,2) NOT NULL DEFAULT 0.00,
     net_profit NUMERIC(15,2) NOT NULL DEFAULT 0.00,
-    roi NUMERIC(10,6) NOT NULL DEFAULT 0.00,
+    roi NUMERIC(15,6) NOT NULL DEFAULT 0.00,
     total_bets INTEGER NOT NULL DEFAULT 0 CHECK (total_bets >= 0),
     winning_bets INTEGER NOT NULL DEFAULT 0 CHECK (winning_bets >= 0),
     losing_bets INTEGER NOT NULL DEFAULT 0 CHECK (losing_bets >= 0),
