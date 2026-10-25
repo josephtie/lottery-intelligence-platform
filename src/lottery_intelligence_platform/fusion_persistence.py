@@ -98,6 +98,9 @@ def backfill(
                 continue
             profile = profiles[code]
             d = fusion_agents.decide(profile, history, rng)
+            if not d["selected_numbers"]:
+                no_bet += 1
+                continue
             hit = len(set(d["selected_numbers"]) & set(winning))
             settle = fusion_agents.settle_bet(
                 d["bet_type"], d["selected_numbers"], winning, d["stake_amount"])
