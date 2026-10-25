@@ -36,7 +36,7 @@ CREATE INDEX betting_formulas_active_idx ON catalog.betting_formulas (is_active)
 CREATE TABLE catalog.betting_odds (
     odd_id UUID PRIMARY KEY,
     formula_id UUID NOT NULL REFERENCES catalog.betting_formulas(formula_id) ON DELETE CASCADE,
-    tier_code TEXT NOT NULL CHECK (tier_code ~ '^[0-9]+N$|^TURBO_[0-9]+$'),
+    tier_code TEXT NOT NULL CHECK (tier_code ~ '^PN$|^[0-9]+N$|^TURBO_[0-9]+$'),
     tier_name TEXT NOT NULL,
     odds NUMERIC(10,2) NOT NULL CHECK (odds > 0),
     payout_multiplier NUMERIC(10,2) NOT NULL DEFAULT 1.00 CHECK (payout_multiplier > 0),
@@ -183,7 +183,7 @@ WHERE bf.code = v.tier_code AND bf.formula_type = 'TURBO';
 
 -- Chance odds
 INSERT INTO catalog.betting_odds (odd_id, formula_id, tier_code, tier_name, odds)
-SELECT gen_random_uuid(), bf.formula_id, v.tier_code, v.tier_name, v.odds_value
+SELECT gen_random_uuid(), bf.formula_id, v.tier_code, v.tier_code, v.odds_value
 FROM catalog.betting_formulas bf
 CROSS JOIN (
     VALUES
@@ -201,7 +201,7 @@ WHERE bf.code = v.formula_code AND bf.formula_type = 'CHANCE';
 
 -- PERM odds
 INSERT INTO catalog.betting_odds (odd_id, formula_id, tier_code, tier_name, odds)
-SELECT gen_random_uuid(), bf.formula_id, v.tier_code, v.tier_name, v.odds_value
+SELECT gen_random_uuid(), bf.formula_id, v.tier_code, v.tier_code, v.odds_value
 FROM catalog.betting_formulas bf
 CROSS JOIN (
     VALUES
@@ -298,7 +298,7 @@ SELECT
     abp.priority
 FROM edge_lab.agent_betting_preferences abp
 JOIN edge_lab.agents a ON a.agent_id = abp.agent_id
-JOIN catalog.betting_formulas bf ON bf.formula_id = bf.formula_id
+JOIN catalog.betting_formulas bf ON bf.formula_id = abp.formula_id
 WHERE abp.is_enabled = TRUE
 ORDER BY abp.agent_id, abp.priority DESC;
 
@@ -309,16 +309,16 @@ SELECT
     bf.name AS formula_name,
     bf.formula_type,
     COUNT(ad.decision_id) AS total_decisions,
-    COUNT(CASE WHEN do.outcome_type = 'WIN' THEN 1 END) AS winning_decisions,
-    COUNT(CASE WHEN do.outcome_type = 'LOSE' THEN 1 END) AS losing_decisions,
-    AVG(CASE WHEN do.outcome_type = 'WIN' THEN do.formula_roi END) AS avg_roi_winners,
+    COUNT(CASE WHEN o.outcome_type = 'WIN' THEN 1 END) AS winning_decisions,
+    COUNT(CASE WHEN o.outcome_type = 'LOSE' THEN 1 END) AS losing_decisions,
+    AVG(CASE WHEN o.outcome_type = 'WIN' THEN o.formula_roi END) AS avg_roi_winners,
     AVG(ad.stake_amount) AS avg_stake,
-    SUM(CASE WHEN do.outcome_type = 'WIN' THEN do.net_result ELSE 0 END) AS total_profit,
-    SUM(CASE WHEN do.outcome_type = 'LOSE' THEN do.net_result ELSE 0 END) AS total_loss,
-    SUM(do.net_result) AS net_profit
+    SUM(CASE WHEN o.outcome_type = 'WIN' THEN o.net_result ELSE 0 END) AS total_profit,
+    SUM(CASE WHEN o.outcome_type = 'LOSE' THEN o.net_result ELSE 0 END) AS total_loss,
+    SUM(o.net_result) AS net_profit
 FROM catalog.betting_formulas bf
 LEFT JOIN edge_lab.agent_decisions ad ON ad.formula_id = bf.formula_id
-LEFT JOIN edge_lab.decision_outcomes do ON do.decision_id = ad.decision_id
+LEFT JOIN edge_lab.decision_outcomes o ON o.decision_id = ad.decision_id
 GROUP BY bf.code, bf.name, bf.formula_type
 ORDER BY bf.formula_type, bf.code;
 
