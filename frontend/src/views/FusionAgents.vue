@@ -38,15 +38,19 @@
       </el-radio-group>
     </div>
 
-    <div v-if="data" class="meta-line">
-      <span class="meta-chip">Jeu : <b>{{ data.draw_type }}</b></span>
-      <span class="meta-chip">{{ data.n_draws }} tirages réglés</span>
-      <span class="meta-chip">{{ data.agents?.length }} agents</span>
-      <span class="meta-chip">Dernier tirage : <b>{{ data.last_draw_date }}</b></span>
-    </div>
-    <div v-if="data?.last_draw_numbers?.length" class="draw-line">
-      <span class="draw-label">Numéros gagnants du dernier tirage :</span>
-      <span v-for="n in data.last_draw_numbers" :key="n" class="number-ball win">{{ n }}</span>
+    <div v-if="data" class="target-bar">
+      <div class="target-title">
+        <span class="target-label">Prédictions des {{ data.agents?.length }} agents pour le tirage du</span>
+        <span class="target-date">{{ data.last_draw_date }}</span>
+      </div>
+      <div class="target-subtitle">
+        <el-tag type="primary" size="large">{{ data.draw_type }}</el-tag>
+        <span class="target-meta">{{ data.n_draws }} tirages réglés</span>
+      </div>
+      <div v-if="data.last_draw_numbers?.length" class="draw-line">
+        <span class="draw-label">Numéros gagnants de ce tirage :</span>
+        <span v-for="n in data.last_draw_numbers" :key="n" class="number-ball win">{{ n }}</span>
+      </div>
     </div>
 
     <el-table :data="paged" stripe style="width: 100%">
@@ -378,18 +382,39 @@ const proofType = computed(() => {
 .sort-toggle {
   margin-left: auto;
 }
-.meta-line {
-  display: flex;
-  gap: 12px;
+.target-bar {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-left: 4px solid #409eff;
+  border-radius: 8px;
+  padding: 16px;
   margin-bottom: 16px;
+}
+.target-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
-.meta-chip {
-  background: var(--bg-alt);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+.target-label {
   color: var(--muted);
+  font-weight: 500;
+  font-size: 14px;
+}
+.target-date {
+  color: #409eff;
+  font-weight: 700;
+  font-size: 20px;
+}
+.target-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.target-meta {
+  color: var(--muted);
+  font-size: 12px;
 }
 .agent-cell {
   display: flex;
