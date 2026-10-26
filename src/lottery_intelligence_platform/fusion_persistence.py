@@ -52,6 +52,15 @@ def load_settled_draws(
     if draw_type:
         where += " AND dt.display_name = %s"
         params.append(draw_type)
+    # DÉDUPLICATION : ne garder que la version de jeu canonique (celle qui a le plus
+    # de tirages réglés). Un backfill à fenêtre différente créait une seconde version
+    # "archive-provisional-<date>" et dupliquait les tirages récents, ce qui gonflait
+    # artificiellement les hits des agents.
+    where += """ AND d.game_version_id = (
+        SELECT game_version_id FROM core.draws
+        WHERE status = 'SETTLED'
+        GROUP BY game_version_id ORDER BY count(*) DESC LIMIT 1
+    )"""
     rows = connection.execute(
         f"""
         SELECT d.draw_id, d.draw_type_id, v.draw_version_id, n.number

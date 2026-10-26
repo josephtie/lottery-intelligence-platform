@@ -106,10 +106,16 @@ def predict_frequency_delay_v1(hist, rng, k):
 
 
 def predict_pair_frequency_v1(hist, rng, k):
-    """Recency-decayed co-occurrence credit over the last 30 draws."""
+    """Recency-decayed co-occurrence credit over the last 30 draws.
+
+    The most recent draw is excluded: it is the outcome we are predicting,
+    so crediting it would just recopy ``hist[-1]`` (a degenerate, look-ahead
+    prediction that produced phantom ``hit=5`` results).
+    """
     freq = frequency(hist)
     score: dict[int, float] = {}
-    for offset, nums in enumerate(reversed(hist[-30:])):
+    past = hist[:-1]  # exclude the draw being predicted
+    for offset, nums in enumerate(reversed(past[-30:])):
         w = 1.0 / (1 + offset)
         for i in range(len(nums)):
             for j in range(i + 1, len(nums)):

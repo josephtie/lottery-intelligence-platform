@@ -20,15 +20,23 @@ class CatalogConflict(RuntimeError):
     pass
 
 
+# The official Loto Bonheur results archive begins on 2020-11-01. The game
+# version is a property of that archive, NOT of the current collection window.
+# Passing ``window.start_date`` here created a new "archive-provisional-<date>"
+# version on every run and duplicated the recent draws.
+ARCHIVE_START = date(2020, 11, 1)
+
+
 def ensure_lotobonheur_catalog(
     connection: Any,
     *,
-    data_coverage_start: date,
+    data_coverage_start: date | None = None,
 ) -> LotoBonheurCatalog:
-    if data_coverage_start < date(2020, 11, 1):
+    if data_coverage_start is not None and data_coverage_start < ARCHIVE_START:
         raise ValueError("data_coverage_start predates the official results archive")
 
-    version = f"archive-provisional-{data_coverage_start.isoformat()}"
+    coverage_start = ARCHIVE_START
+    version = f"archive-provisional-{coverage_start.isoformat()}"
     rules = {
         "number_min": 1,
         "number_max": 90,
@@ -46,7 +54,7 @@ def ensure_lotobonheur_catalog(
             connection,
             game_id=game_id,
             version=version,
-            effective_from=data_coverage_start,
+            effective_from=coverage_start,
             rules=rules,
         )
     return LotoBonheurCatalog(source_id, game_id, game_version_id, version)
