@@ -15,6 +15,8 @@ def test_all_profiles_produce_valid_decisions():
     history = _history()
     rng = random.Random(7)
     for profile in FUSION_AGENT_PROFILES:
+        if profile.strategy == "digital_root_turbo":
+            continue  # agent Turbo : connexion DB requise + 2 numéros (pas 5)
         d = fa.decide(profile, history, rng, k=5)
         nums = d["selected_numbers"]
         assert len(nums) == 5, profile.code
@@ -23,6 +25,16 @@ def test_all_profiles_produce_valid_decisions():
         assert d["stake_amount"] > 0
         assert d["reasoning"]
         assert 0.0 <= d["confidence_score"] <= 1.0
+
+
+def test_digital_root_turbo_profile():
+    profile = fa.get_profile("fusion_digital_root_turbo")
+    assert profile.bet_type == "TURBO_2"
+    assert profile.strategy == "digital_root_turbo"
+    # Sans connexion DB, l'agent Turbo renvoie une décision no-bet (pas d'erreur).
+    d = fa.decide(profile, [], random.Random(1))
+    assert d["selected_numbers"] == []
+    assert d["bet_type"] == "TURBO_2"
 
 
 def test_profiles_are_distinct_strategies():

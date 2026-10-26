@@ -340,8 +340,10 @@ class RelationDiscovery:
         draw_roots = [get_root_fast(n) for n in draw["winning_numbers"]]
 
         for relation in self.relations.values():
-            if not relation.should_use_for_prediction():
-                continue
+            # Tester toutes les relations non expirées/rejetées : une CANDIDATE doit
+            # accumuler des observations avant d'être promue OBSERVING. L'ancien filtre
+            # should_use_for_prediction() (qui exclut CANDIDATE) créait un cycle mort :
+            # CANDIDATE jamais testée -> jamais d'observation -> reste CANDIDATE.
 
             # Check if this draw tests this relation
             tested = False
@@ -438,8 +440,10 @@ class RelationDiscovery:
             root = relation.key.target_root
             confidence = relation.evidence.success_rate - relation.baseline_success_rate
 
-            if confidence > 0:
-                root_scores.setdefault(root, []).append((confidence, relation))
+            # Toujours retenir la racine : l'agent de pari virtuel doit produire des
+            # numéros même en l'absence d'avantage démontré (le tri par confidence
+            # place les meilleures racines en tête, avantage ou non).
+            root_scores.setdefault(root, []).append((confidence, relation))
 
         # Sort roots by aggregated confidence
         ranked_roots = []

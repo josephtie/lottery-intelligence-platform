@@ -1220,10 +1220,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                    ORDER BY d.scheduled_date, d.scheduled_sequence, n.position""",
                 (draw_type_id,),
             ).fetchall()
+        from datetime import date as _date
         draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
-        history = [sorted(nums) for nums in draws.values()]
+        history = [list(nums) for nums in draws.values()]
         draw_dates = [str(k[0]) for k in draws.keys()]
 
         # walk-forward strict : l'agent décide avec l'historique SANS le dernier
@@ -1231,12 +1232,19 @@ class ApiHandler(BaseHTTPRequestHandler):
         past = history[:-1] if len(history) > 1 else history
         last_draw = history[-1] if history else []
         last_draw_date = draw_dates[-1] if draw_dates else None
+        last_target = _date.fromisoformat(last_draw_date) if last_draw_date else None
 
         rng = _random.Random(len(history))
         decisions = []
         for profile in fa.FUSION_AGENT_PROFILES:
-            d = fa.decide(profile, past, rng, k=5)
-            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw, d["stake_amount"])
+            if profile.strategy == "digital_root_turbo":
+                with psycopg.connect(self.dsn, autocommit=True) as conn2:
+                    d = fa.decide(profile, past, rng, k=5, connection=conn2,
+                                  draw_type_id=draw_type_id, target=last_target)
+            else:
+                d = fa.decide(profile, past, rng, k=5)
+            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw,
+                                   d["stake_amount"], winning_positions=last_draw)
             decisions.append({
                 "code": d["code"],
                 "display_name": d["display_name"],
@@ -1321,11 +1329,14 @@ class ApiHandler(BaseHTTPRequestHandler):
         draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
-        history = [sorted(nums) for nums in draws.values()]
+        history = [list(nums) for nums in draws.values()]
         draw_dates = [str(k[0]) for k in draws.keys()]
 
         rng = _random.Random(len(history))
-        detail = fa.walkforward_detail(profile, history, window=window, rng=rng, dates=draw_dates)
+        with psycopg.connect(self.dsn, autocommit=True) as conn2:
+            detail = fa.walkforward_detail(profile, history, window=window, rng=rng,
+                                           dates=draw_dates, connection=conn2,
+                                           draw_type_id=draw_type_id)
         detail["draw_type"] = display_name
         detail["n_draws"] = len(history)
         return detail

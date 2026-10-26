@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import random
 from collections import OrderedDict
+from datetime import date
 from decimal import Decimal
 from typing import Any, Sequence
 from uuid import UUID
@@ -45,8 +46,12 @@ def bootstrap(connection, *, initial_capital: Decimal = INITIAL_CAPITAL) -> dict
 
 def load_settled_draws(
     connection, draw_type: str | None = None, limit: int | None = None
-) -> list[tuple[UUID, UUID, UUID, list[int]]]:
-    """Tirages réglés chronologiques : (draw_id, draw_type_id, draw_version_id, winning_numbers)."""
+) -> list[tuple[UUID, UUID, UUID, list[int], date]]:
+    """Tirages réglés chronologiques : (draw_id, draw_type_id, draw_version_id, winning_numbers, scheduled_date).
+
+    ``winning_numbers`` est ordonné par position de tirage (pas trié) afin que les
+    paris TURBO positionnels puissent être réglés correctement.
+    """
     where = "d.status = 'SETTLED'"
     params: list[Any] = []
     if draw_type:
@@ -63,7 +68,7 @@ def load_settled_draws(
     )"""
     rows = connection.execute(
         f"""
-        SELECT d.draw_id, d.draw_type_id, v.draw_version_id, n.number
+        SELECT d.draw_id, d.draw_type_id, v.draw_version_id, n.number, d.scheduled_date
         FROM core.draws d
         JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
         JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
@@ -73,10 +78,10 @@ def load_settled_draws(
         """,
         params,
     ).fetchall()
-    draws: "OrderedDict[tuple[UUID, UUID, UUID], list[int]]" = OrderedDict()
-    for draw_id, draw_type_id, draw_version_id, num in rows:
-        draws.setdefault((draw_id, draw_type_id, draw_version_id), []).append(num)
-    result = [(k[0], k[1], k[2], sorted(nums)) for k, nums in draws.items()]
+    draws: "OrderedDict[tuple[UUID, UUID, UUID, date], list[int]]" = OrderedDict()
+    for draw_id, draw_type_id, draw_version_id, num, scheduled_date in rows:
+        draws.setdefault((draw_id, draw_type_id, draw_version_id, scheduled_date), []).append(num)
+    result = [(k[0], k[1], k[2], nums, k[3]) for k, nums in draws.items()]
     if limit:
         result = result[-limit:]
     return result
@@ -100,19 +105,21 @@ def backfill(
     rng = random.Random(rng_seed)
     history: list[list[int]] = []
     new = skipped = no_bet = 0
-    for draw_id, draw_type_id, draw_version_id, winning in draws:
+    for draw_id, draw_type_id, draw_version_id, winning, scheduled_date in draws:
         for code, agent_id in ids.items():
             if _has_decision(connection, agent_id, draw_id):
                 skipped += 1
                 continue
             profile = profiles[code]
-            d = fusion_agents.decide(profile, history, rng)
+            d = fusion_agents.decide(profile, history, rng, connection=connection,
+                                     draw_type_id=draw_type_id, target=scheduled_date)
             if not d["selected_numbers"]:
                 no_bet += 1
                 continue
             hit = len(set(d["selected_numbers"]) & set(winning))
             settle = fusion_agents.settle_bet(
-                d["bet_type"], d["selected_numbers"], winning, d["stake_amount"])
+                d["bet_type"], d["selected_numbers"], winning, d["stake_amount"],
+                winning_positions=winning)
             payout = settle.get("total_gain", Decimal("0"))
             try:
                 decision = agent_engine.make_decision(

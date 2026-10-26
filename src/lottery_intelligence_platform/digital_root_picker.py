@@ -10,11 +10,6 @@ from datetime import date
 from typing import Any, Mapping
 
 from lottery_intelligence_platform.digital_root_analyzer import DigitalRootTurboAnalyzer
-from lottery_intelligence_platform.prediction_generation import (
-    DEFAULT_PICK_COUNT,
-    _history,
-    _stable_seed,
-)
 
 
 # Global analyzer instance (would be initialized with connection in production)
