@@ -20,7 +20,7 @@ from uuid import UUID
 from lottery_intelligence_platform import agent_engine
 from lottery_intelligence_platform import fusion_agents
 
-INITIAL_CAPITAL = Decimal("100000.00")
+INITIAL_CAPITAL = Decimal("200000.00")
 
 
 def bootstrap(connection, *, initial_capital: Decimal = INITIAL_CAPITAL) -> dict[str, UUID]:

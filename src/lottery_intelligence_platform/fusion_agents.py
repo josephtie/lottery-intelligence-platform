@@ -318,7 +318,7 @@ def settle_bet(bet_type: str, numbers: Sequence[int], winning: Sequence[int],
         return {"status": "ERR", "tier": None, "net_profit": Decimal("0"), "roi": Decimal("0")}
 
 
-INITIAL_CAPITAL = Decimal("100000.00")
+INITIAL_CAPITAL = Decimal("200000.00")
 
 
 def _version_history(profile: FusionAgentProfile, reasoning: str) -> list[str]:
