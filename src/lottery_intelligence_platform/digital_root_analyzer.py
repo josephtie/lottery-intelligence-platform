@@ -163,7 +163,7 @@ class DigitalRootTurboAnalyzer:
                 connection,
                 game_id,
                 before_date=training_cutoff,
-                limit=200,
+                limit=60,
             )
             all_historical.extend(historical)
 
@@ -205,7 +205,7 @@ class DigitalRootTurboAnalyzer:
             connection,
             draw_type_id,
             before_date=target_date,
-            limit=100,
+            limit=60,
         )
 
         # Get numbers required for this Turbo variant
@@ -338,7 +338,7 @@ class DigitalRootTurboAnalyzer:
             connection,
             draw_type_id,
             before_date=target_date,
-            limit=500,
+            limit=60,
         )
 
         # Calculate number frequencies
