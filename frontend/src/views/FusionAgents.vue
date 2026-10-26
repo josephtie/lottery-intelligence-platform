@@ -207,6 +207,11 @@
                   <span class="bet-nums-label">joué :</span>
                   <span v-for="n in b.selected_numbers" :key="n" class="mini-ball"
                         :class="{ win: (b.winning_numbers || []).includes(n) }">{{ n }}</span>
+                  <span class="bet-hit" :class="b.hits > 0 ? 'hit-ok' : ''">{{ b.hits }}/5</span>
+                </div>
+                <div class="bet-numbers">
+                  <span class="bet-nums-label">gagnant :</span>
+                  <span v-for="n in b.winning_numbers" :key="n" class="mini-ball win">{{ n }}</span>
                 </div>
               </div>
             </div>
@@ -546,6 +551,16 @@ const proofType = computed(() => {
 .bet-nums-label {
   font-size: 11px;
   color: var(--muted);
+}
+.bet-hit {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 8px;
+  font-family: monospace;
+}
+.bet-hit.hit-ok {
+  color: #67c23a;
+  font-weight: 600;
 }
 .mini-ball {
   display: inline-flex;

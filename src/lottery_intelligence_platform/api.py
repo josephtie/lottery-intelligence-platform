@@ -1195,7 +1195,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             if draw_type:
                 dt = conn.execute(
                     "SELECT draw_type_id, display_name FROM catalog.draw_types "
-                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                    "WHERE code = %s OR display_name = %s "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = catalog.draw_types.draw_type_id) DESC LIMIT 1",
+                    (draw_type, draw_type),
                 ).fetchone()
             else:
                 dt = conn.execute(
@@ -1290,7 +1293,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             if draw_type:
                 dt = conn.execute(
                     "SELECT draw_type_id, display_name FROM catalog.draw_types "
-                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                    "WHERE code = %s OR display_name = %s "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = catalog.draw_types.draw_type_id) DESC LIMIT 1",
+                    (draw_type, draw_type),
                 ).fetchone()
             else:
                 dt = conn.execute(
