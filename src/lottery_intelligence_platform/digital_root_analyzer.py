@@ -163,11 +163,16 @@ class DigitalRootTurboAnalyzer:
                 connection,
                 game_id,
                 before_date=training_cutoff,
-                limit=200,
+                limit=60,
             )
             all_historical.extend(historical)
 
         new_relations = self.relation_discovery.discover_relations(all_historical)
+        # Entraîner les relations : les évaluer sur l'historique (ordre chronologique)
+        # pour calculer leur taux de succès réel. Sans cela ``success_rate`` reste à 0
+        # et ``predict_roots`` ne renvoie jamais de racine.
+        for draw in sorted(all_historical, key=lambda d: d["scheduled_date"]):
+            self.relation_discovery.update_with_new_draw(draw)
         return new_relations
 
     def predict(
@@ -200,7 +205,7 @@ class DigitalRootTurboAnalyzer:
             connection,
             draw_type_id,
             before_date=target_date,
-            limit=100,
+            limit=60,
         )
 
         # Get numbers required for this Turbo variant
@@ -333,7 +338,7 @@ class DigitalRootTurboAnalyzer:
             connection,
             draw_type_id,
             before_date=target_date,
-            limit=500,
+            limit=60,
         )
 
         # Calculate number frequencies

@@ -26,6 +26,7 @@ import psycopg
 
 from lottery_intelligence_platform import (
     calling_image,
+    digital_root_statistics,
     game_temporal,
     lab_matrix,
     meta_ensemble,
@@ -722,6 +723,42 @@ class ApiHandler(BaseHTTPRequestHandler):
             "top_pairs": pairs,
         }
 
+    def _digital_root_statistics(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Digital root descriptive statistics (10/30/45/60/90 days) for one game."""
+        draw_type = (qs.get("draw_type") or [None])[0]
+        ref_str = (qs.get("reference_date") or [None])[0]
+        if ref_str:
+            try:
+                reference = date.fromisoformat(ref_str)
+            except ValueError:
+                return {"error": f"invalid reference_date: {ref_str}"}
+        else:
+            reference = date.today()
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       WHERE dt.code = %s OR dt.display_name = %s
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                    (draw_type, draw_type),
+                ).fetchone()
+                if dt_row is None:
+                    return {"error": f"unknown draw_type: {draw_type}"}
+            else:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+            draw_type_id, display_name = dt_row
+            return digital_root_statistics.compute_digital_root_statistics(
+                conn, draw_type_id, display_name, reference)
+
     def _lab_structure(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """M04 + M05 + M06: null reference, serial dependence, change point
         for one draw type, computed on VALID draws in chronological order."""
@@ -1309,7 +1346,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             if draw_type:
                 dt = conn.execute(
                     "SELECT draw_type_id, display_name FROM catalog.draw_types "
-                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                    "WHERE code = %s OR display_name = %s "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = catalog.draw_types.draw_type_id) DESC LIMIT 1",
+                    (draw_type, draw_type),
                 ).fetchone()
             else:
                 dt = conn.execute(
@@ -1331,10 +1371,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                    ORDER BY d.scheduled_date, d.scheduled_sequence, n.position""",
                 (draw_type_id,),
             ).fetchall()
+        from datetime import date as _date
         draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
-        history = [sorted(nums) for nums in draws.values()]
+        history = [list(nums) for nums in draws.values()]
         draw_dates = [str(k[0]) for k in draws.keys()]
 
         # walk-forward strict : l'agent décide avec l'historique SANS le dernier
@@ -1342,12 +1383,19 @@ class ApiHandler(BaseHTTPRequestHandler):
         past = history[:-1] if len(history) > 1 else history
         last_draw = history[-1] if history else []
         last_draw_date = draw_dates[-1] if draw_dates else None
+        last_target = _date.fromisoformat(last_draw_date) if last_draw_date else None
 
         rng = _random.Random(len(history))
         decisions = []
         for profile in fa.FUSION_AGENT_PROFILES:
-            d = fa.decide(profile, past, rng, k=5)
-            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw, d["stake_amount"])
+            if profile.strategy == "digital_root_turbo":
+                with psycopg.connect(self.dsn, autocommit=True) as conn2:
+                    d = fa.decide(profile, past, rng, k=5, connection=conn2,
+                                  draw_type_id=draw_type_id, target=last_target)
+            else:
+                d = fa.decide(profile, past, rng, k=5)
+            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw,
+                                   d["stake_amount"], winning_positions=last_draw)
             decisions.append({
                 "code": d["code"],
                 "display_name": d["display_name"],
@@ -1404,7 +1452,10 @@ class ApiHandler(BaseHTTPRequestHandler):
             if draw_type:
                 dt = conn.execute(
                     "SELECT draw_type_id, display_name FROM catalog.draw_types "
-                    "WHERE code = %s OR display_name = %s", (draw_type, draw_type),
+                    "WHERE code = %s OR display_name = %s "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = catalog.draw_types.draw_type_id) DESC LIMIT 1",
+                    (draw_type, draw_type),
                 ).fetchone()
             else:
                 dt = conn.execute(
@@ -1429,11 +1480,14 @@ class ApiHandler(BaseHTTPRequestHandler):
         draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
         for d, seq, num in rows:
             draws.setdefault((d, seq), []).append(num)
-        history = [sorted(nums) for nums in draws.values()]
+        history = [list(nums) for nums in draws.values()]
         draw_dates = [str(k[0]) for k in draws.keys()]
 
         rng = _random.Random(len(history))
-        detail = fa.walkforward_detail(profile, history, window=window, rng=rng, dates=draw_dates)
+        with psycopg.connect(self.dsn, autocommit=True) as conn2:
+            detail = fa.walkforward_detail(profile, history, window=window, rng=rng,
+                                           dates=draw_dates, connection=conn2,
+                                           draw_type_id=draw_type_id)
         detail["draw_type"] = display_name
         detail["n_draws"] = len(history)
         return detail
@@ -1532,6 +1586,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/statistics":
                 self._send(self._statistics(parse_qs(url.query)))
+                return
+            if url.path == "/api/digital-root-statistics":
+                self._send(self._digital_root_statistics(parse_qs(url.query)))
                 return
             if url.path == "/api/lab/structure":
                 self._send(self._lab_structure(parse_qs(url.query)))
