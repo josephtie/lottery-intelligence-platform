@@ -425,6 +425,14 @@ ROUTES: dict[str, str] = {
           (SELECT AVG(roi)::FLOAT FROM research.digital_root_predictions
            WHERE settled_at IS NOT NULL) AS avg_roi
     """,
+    # DIGITAL ROOT STATISTICS ENDPOINTS
+    "/api/digital-root-stats/games": """
+        SELECT dt.draw_type_id, dt.display_name AS game_name,
+               (SELECT COUNT(*) FROM core.draws d
+                WHERE d.draw_type_id = dt.draw_type_id AND d.status = 'SETTLED') AS total_draws
+        FROM catalog.draw_types dt
+        ORDER BY dt.display_name
+    """,
 }
 
 
@@ -1142,6 +1150,149 @@ class ApiHandler(BaseHTTPRequestHandler):
         else:
             self._send_file(dist / "index.html")
 
+    def _digital_root_stats(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Digital root statistics for a game and time window.
+
+        Provides descriptive statistics without predictive claims.
+        """
+        from lottery_intelligence_platform.digital_root_statistics import DigitalRootStatistics
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        window_days_str = (qs.get("window_days") or ["30"])[0]
+        reference_date_str = (qs.get("reference_date") or [None])[0]
+
+        try:
+            window_days = int(window_days_str)
+        except ValueError:
+            return {"error": "window_days must be an integer"}
+
+        if window_days not in [10, 30, 45, 60, 90]:
+            return {"error": "window_days must be one of: 10, 30, 45, 60, 90"}
+
+        if reference_date_str:
+            try:
+                reference_date = date.fromisoformat(reference_date_str)
+            except ValueError:
+                return {"error": "reference_date must be YYYY-MM-DD format"}
+        else:
+            reference_date = date.today()
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    "SELECT draw_type_id, display_name FROM catalog.draw_types "
+                    "WHERE code = %s OR display_name = %s",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    "SELECT dt.draw_type_id, dt.display_name FROM catalog.draw_types dt "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = dt.draw_type_id) DESC LIMIT 1",
+                ).fetchone()
+
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+
+            draw_type_id, display_name = dt
+
+            # Calculate statistics
+            analyzer = DigitalRootStatistics()
+            game_stats = analyzer.calculate_game_statistics(
+                conn,
+                draw_type_id,
+                reference_date,
+            )
+
+            window_stats = game_stats.windows.get(window_days)
+            if not window_stats:
+                return {"error": f"No data for {window_days}-day window"}
+
+            # Convert to JSON-serializable format
+            result = {
+                "game_id": str(game_stats.game_id),
+                "game_name": game_stats.game_name,
+                "reference_date": str(game_stats.reference_date),
+                "window_days": window_days,
+                "start_date": str(window_stats.start_date),
+                "end_date": str(window_stats.end_date),
+                "draw_count": window_stats.draw_count,
+                "total_numbers_analyzed": window_stats.total_numbers_analyzed,
+                "data_quality_score": window_stats.data_quality_score,
+                "has_duplicate_draws": window_stats.has_duplicate_draws,
+                "has_missing_dates": window_stats.has_missing_dates,
+                "global_distribution": [
+                    {
+                        "root": d.root,
+                        "occurrences": d.occurrences,
+                        "percentage": round(d.percentage, 2),
+                        "draws_containing": d.draws_containing,
+                        "deviation_from_reference": round(d.deviation_from_reference, 2),
+                    }
+                    for d in window_stats.global_distribution
+                ],
+                "position_distributions": {
+                    str(pos): {
+                        "root_counts": dist.root_counts,
+                        "root_percentages": {str(k): round(v, 2) for k, v in dist.root_percentages.items()},
+                        "most_frequent_root": dist.most_frequent_root,
+                        "sample_size": dist.sample_size,
+                    }
+                    for pos, dist in window_stats.position_distributions.items()
+                },
+                "draw_signatures": [
+                    {
+                        "draw_id": str(s.draw_id),
+                        "scheduled_date": str(s.scheduled_date),
+                        "original_numbers": s.original_numbers,
+                        "root_sequence": s.root_sequence,
+                        "distinct_roots": s.distinct_roots,
+                        "root_repetitions": {str(k): v for k, v in s.root_repetitions.items()},
+                    }
+                    for s in window_stats.draw_signatures[:20]  # Last 20 draws
+                ],
+                "family_frequencies": {
+                    str(root): {
+                        "root": f.family_frequencies[root].root,
+                        "family_numbers": f.family_frequencies[root].family_numbers,
+                        "total_occurrences": f.family_frequencies[root].total_occurrences,
+                        "frequency_by_position": {
+                            str(k): round(v, 2) for k, v in f.family_frequencies[root].frequency_by_position.items()
+                        },
+                    }
+                    for root, f in window_stats.family_frequencies.items()
+                },
+                "temporal_changes": [
+                    {
+                        "root": c.root,
+                        "window_from": c.window_from,
+                        "window_to": c.window_to,
+                        "percentage_change": round(c.percentage_change, 2),
+                        "trend": c.trend,
+                        "sample_size_from": c.sample_size_from,
+                        "sample_size_to": c.sample_size_to,
+                    }
+                    for c in game_stats.temporal_changes
+                    if c.window_to == window_days or c.window_from == window_days
+                ],
+                "transition_matrices": {
+                    str(source): {
+                        "source_root": tm.source_root,
+                        "target_counts": tm.target_counts,
+                        "conditional_probabilities": {
+                            str(k): round(v, 4) for k, v in tm.conditional_probabilities.items()
+                        },
+                        "total_observations": tm.total_observations,
+                    }
+                    for source, tm in game_stats.transition_matrices.items()
+                },
+                "warning": (
+                    "Insufficient sample size" if window_stats.draw_count < 10 else None
+                ),
+            }
+
+            return result
+
     def _fusion_agents(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """Decisions of the virtual fusion betting agents for one draw type.
 
@@ -1358,6 +1509,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             if url.path == "/api/lab/matrix":
                 self._send(self._lab_matrix(parse_qs(url.query)))
                 return
+            if url.path == "/api/digital-root-stats/summary":
+                self._send(self._digital_root_stats(parse_qs(url.query)))
+                return
             if url.path == "/api/lab/calling-image":
                 self._send(self._lab_calling_image(parse_qs(url.query)))
                 return
@@ -1402,6 +1556,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/fusion/agents":
                 self._send(self._fusion_agents(parse_qs(url.query)))
+                return
+            if url.path == "/api/digital-root-stats/summary":
+                self._send(self._digital_root_stats(parse_qs(url.query)))
                 return
             if url.path == "/api/fusion/agent-detail":
                 self._send(self._fusion_agent_detail(parse_qs(url.query)))
