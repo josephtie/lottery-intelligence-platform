@@ -10,16 +10,26 @@
     </div>
 
     <div class="filters-bar">
+      <el-date-picker
+        v-model="targetDate"
+        type="date"
+        placeholder="Date du tirage"
+        format="YYYY-MM-DD"
+        value-format="YYYY-MM-DD"
+        style="width: 180px"
+        @change="loadGamesForDate"
+      />
       <el-select
         v-model="drawType"
-        placeholder="Jeu"
+        placeholder="Jeu du jour"
         filterable
         style="width: 220px"
-        @change="reload"
+        :disabled="!targetDate || gamesForDate.length === 0"
+        @change="loadPredictions"
       >
         <el-option
-          v-for="g in games"
-          :key="g.code"
+          v-for="g in gamesForDate"
+          :key="g.draw_type_id"
           :label="g.display_name"
           :value="g.display_name"
         />
@@ -41,15 +51,16 @@
     <div v-if="data" class="target-bar">
       <div class="target-title">
         <span class="target-label">Prédictions des {{ data.agents?.length }} agents pour le tirage du</span>
-        <span class="target-date">{{ data.last_draw_date }}</span>
+        <span class="target-date">{{ data.target_date || 'tirage à venir' }}</span>
       </div>
       <div class="target-subtitle">
         <el-tag type="primary" size="large">{{ data.draw_type }}</el-tag>
+        <el-tag :type="data.target_status === 'SETTLED' ? 'success' : 'warning'" size="large">{{ data.target_status }}</el-tag>
         <span class="target-meta">{{ data.n_draws }} tirages réglés</span>
       </div>
-      <div v-if="data.last_draw_numbers?.length" class="draw-line">
+      <div v-if="data.target_draw_numbers?.length" class="draw-line">
         <span class="draw-label">Numéros gagnants de ce tirage :</span>
-        <span v-for="n in data.last_draw_numbers" :key="n" class="number-ball win">{{ n }}</span>
+        <span v-for="n in data.target_draw_numbers" :key="n" class="number-ball win">{{ n }}</span>
       </div>
     </div>
 
@@ -80,12 +91,15 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="Résultat (dernier tirage)" width="180">
+      <el-table-column label="Résultat" width="160">
         <template #default="{ row }">
           <div class="result-cell">
-            <span class="hits">{{ row.hits_last }}/5</span>
-            <span :class="row.net_result_last > 0 ? 'net-win' : 'net-loss'">
-              {{ row.net_result_last > 0 ? '+' : '' }}{{ row.net_result_last }} F
+            <span class="hits">{{ row.hits }}/5</span>
+            <el-tag :type="row.outcome === 'WIN' ? 'success' : row.outcome === 'LOSS' ? 'danger' : 'info'" size="small">
+              {{ row.outcome }}
+            </el-tag>
+            <span :class="row.net_result > 0 ? 'net-win' : 'net-loss'">
+              {{ row.net_result > 0 ? '+' : '' }}{{ row.net_result }} F
             </span>
           </div>
         </template>
@@ -252,21 +266,45 @@ import api from '../api'
 import Pager from '../components/Pager.vue'
 
 const games = ref<any[]>([])
+const gamesForDate = ref<any[]>([])
 const data = ref<any>(null)
 const err = ref('')
 const drawType = ref('')
+const targetDate = ref('')
 const search = ref('')
 const sortKey = ref('confidence')
 const page = ref(1)
 const perPage = ref(20)
 
-async function load() {
+const today = new Date().toISOString().split('T')[0]
+
+async function loadGamesForDate() {
   err.value = ''
+  gamesForDate.value = []
+  drawType.value = ''
+  data.value = null
+  
+  if (!targetDate.value) return
+  
   try {
-    const path = drawType.value
-      ? `/api/fusion/agents?draw_type=${encodeURIComponent(drawType.value)}`
-      : '/api/fusion/agents'
-    const res = await api.get(path)
+    const res = await api.get('/api/lab/draws-by-date', { params: { date: targetDate.value } })
+    gamesForDate.value = res.data.data || []
+  } catch (e: any) {
+    err.value = e.response?.data?.error || e.message || 'erreur réseau'
+  }
+}
+
+async function loadPredictions() {
+  err.value = ''
+  if (!drawType.value) return
+  
+  try {
+    const res = await api.get('/api/fusion/agents', { 
+      params: { 
+        draw_type: drawType.value,
+        date: targetDate.value
+      } 
+    })
     data.value = res.data
   } catch (e: any) {
     err.value = e.response?.data?.error || e.message || 'erreur réseau'
@@ -277,12 +315,8 @@ onMounted(async () => {
   try {
     const g = await api.get('/api/lab/draw-types')
     games.value = g.data.data || []
-    if (games.value.length) drawType.value = games.value[0].display_name
   } catch { /* ignore */ }
-  await load()
 })
-
-watch(drawType, () => { page.value = 1; load() })
 
 const filtered = computed(() => {
   const list = data.value?.agents || []
@@ -306,7 +340,7 @@ const paged = computed(() => {
 })
 
 function isWin(n: number) {
-  return (data.value?.last_draw_numbers || []).includes(n)
+  return (data.value?.target_draw_numbers || []).includes(n)
 }
 
 const drawerVisible = ref(false)

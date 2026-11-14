@@ -112,6 +112,111 @@
         </template>
       </el-tab-pane>
 
+      <!-- ======================= Onglet Racines descriptives ======================= -->
+      <el-tab-pane label="🌱 Racines descriptives" name="root-stats">
+        <div class="sub" style="margin-bottom:10px">
+          Statistiques descriptives des racines numériques (même format que l'onglet Numéros).
+          Racine numérique = somme des chiffres réduite à un chiffre, <b>9 → 0</b> :
+          9 classes (0–8), chacune couvrant 10 numéros → référence uniforme
+          <b>11,11 %</b>. Une fréquence élevée n'est jamais une garantie de sortie.
+        </div>
+
+        <div class="filters" style="margin-bottom:10px">
+          <select v-model="rootDays" @change="loadRootStats">
+            <option :value="10">10 derniers jours</option>
+            <option :value="30">30 derniers jours</option>
+            <option :value="50">50 derniers jours</option>
+            <option :value="90">90 derniers jours</option>
+            <option :value="365">1 an</option>
+            <option :value="0">Tout l'historique</option>
+          </select>
+        </div>
+
+        <div v-if="rootStatsLoading" class="sub">Chargement…</div>
+        <div v-else-if="rootStatsError" class="badge-err">{{ rootStatsError }}</div>
+        <template v-else-if="rootStats">
+          <div class="cards" style="margin-bottom:14px">
+            <div class="card"><div class="label">Tirages analysés</div>
+              <div class="value">{{ rootStats.draw_count }}</div></div>
+            <div class="card"><div class="label">Attendu / racine</div>
+              <div class="value">{{ rootStats.expected_per_number?.toFixed(1) }}</div></div>
+            <div class="card"><div class="label">Test χ² uniformité</div>
+              <div class="value" :class="rootStats.uniform ? 'green' : 'red'">
+                {{ rootStats.p_value == null ? 'n/c' : 'p = ' + rootStats.p_value.toFixed(3) }}</div>
+              <div class="sub">{{ rootStats.uniform ? 'compatible avec l\'uniforme' : 'écart significatif' }} · χ²={{ rootStats.chi_square?.toFixed(1) }} df=8</div></div>
+            <div class="card"><div class="label">Plus grand retard</div>
+              <div class="value gold">{{ rootStats.max_delay?.number }}</div>
+              <div class="sub">{{ rootStats.max_delay?.delay }} tirages sans sortir · dernier {{ rootStats.max_delay?.last_date }}</div></div>
+          </div>
+
+          <div class="stat-grid">
+            <div>
+              <h3 class="sh">🔥 Chauds</h3>
+              <div v-for="x in rootStats.hot" :key="'rh'+x.number" class="stat-hbar">
+                <span class="num-ball">{{ x.number }}</span>
+                <div class="bar"><div class="fill" :style="{width: barwRoot(x.count)}"></div></div>
+                <span class="num">{{ x.count }}</span>
+              </div>
+            </div>
+            <div>
+              <h3 class="sh">🧊 Froids</h3>
+              <div v-for="x in rootStats.cold" :key="'rc'+x.number" class="stat-hbar">
+                <span class="num-ball cold-ball">{{ x.number }}</span>
+                <div class="bar"><div class="fill cold-fill" :style="{width: barwRoot(x.count)}"></div></div>
+                <span class="num">{{ x.count }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-grid" style="margin-top:14px">
+            <div>
+              <h3 class="sh">🎯 Deux premières racines (positions 1–2)</h3>
+              <div class="sub" style="margin-bottom:8px">
+                Fréquence de sortie en 1re ou 2e position · attendu ≈
+                {{ rootStats.first_two_expected?.toFixed(1) }} sorties sur {{ rootStats.draw_count }} tirages
+              </div>
+              <div v-for="x in rootStats.first_two" :key="'rf'+x.number" class="stat-hbar">
+                <span class="num-ball pos-ball">{{ x.number }}</span>
+                <div class="bar"><div class="fill pos-fill"
+                     :style="{width: barw2(x.count, rootStats.first_two[0]?.count)}"></div></div>
+                <span class="num">{{ x.count }}</span>
+              </div>
+            </div>
+            <div>
+              <h3 class="sh">👯 Paires de racines les plus fréquentes</h3>
+              <div class="sub" style="margin-bottom:6px">
+                Comparées à l'attente du hasard — p-value binomiale, q corrigé FDR
+                sur les 36 paires possibles. q &lt; 0.10 seulement = signal.
+              </div>
+              <table class="data mb0" v-if="rootStats.top_pairs?.length">
+                <tr><th>Paire</th><th>Sorties</th><th>Attendu</th><th>Lift</th><th>p</th><th>q FDR</th><th>Dernière</th></tr>
+                <tr v-for="p in rootStats.top_pairs.slice(0, 12)" :key="p.pair.join('-')">
+                  <td><span v-for="n in p.pair" :key="n" class="num-ball pair-ball">{{ n }}</span></td>
+                  <td class="mono">{{ p.count }}</td>
+                  <td class="mono sub">{{ p.expected != null ? p.expected.toFixed(2) : '—' }}</td>
+                  <td class="mono">{{ p.lift != null ? '×' + p.lift.toFixed(1) : '—' }}</td>
+                  <td class="mono sub">{{ p.p_value != null ? p.p_value.toExponential(1) : '—' }}</td>
+                  <td class="mono" :class="p.q_fdr != null && p.q_fdr < 0.10 ? 'badge-ok' : 'sub'">
+                    {{ p.q_fdr != null ? p.q_fdr.toFixed(2) : '—' }}</td>
+                  <td class="mono sub">{{ p.last_date }}</td>
+                </tr>
+              </table>
+              <div v-else class="sub">Pas assez de tirages.</div>
+            </div>
+          </div>
+
+          <h3 class="sh" style="margin-top:16px">Grille 0–8 (fréquence · retard en titre)</h3>
+          <div class="grid9">
+            <div v-for="x in rootStats.numbers" :key="x.number" class="cell"
+                 :class="cellClassRoot(x)"
+                 :title="`racine ${x.number} — ${x.count} sorties · retard ${x.delay} tirages · dernier ${x.last_date ?? 'jamais'}`">
+              <span class="cn">{{ x.number }}</span>
+              <span class="cc">{{ x.count }}</span>
+            </div>
+          </div>
+        </template>
+      </el-tab-pane>
+
       <!-- =================== Onglet Racines numériques =================== -->
       <el-tab-pane label="🌱 Racines numériques" name="roots">
         <div class="sub" style="margin-bottom:10px">
@@ -239,6 +344,11 @@ const roots = ref<any>(null)
 const rootsLoading = ref(false)
 const rootsError = ref('')
 
+const rootDays = ref(90)
+const rootStats = ref<any>(null)
+const rootStatsLoading = ref(false)
+const rootStatsError = ref('')
+
 const today = new Date().toISOString().slice(0, 10)
 
 const win = computed(() =>
@@ -249,13 +359,26 @@ const positionList = computed(() =>
 const maxCount = computed(() =>
   Math.max(1, ...(stats.value?.numbers ?? []).map((x: any) => x.count)))
 
+const maxRootCount = computed(() =>
+  Math.max(1, ...(rootStats.value?.numbers ?? []).map((x: any) => x.count)))
+
 function barw(c: number) { return (c / maxCount.value * 100).toFixed(1) + '%' }
+function barwRoot(c: number) { return (c / maxRootCount.value * 100).toFixed(1) + '%' }
 function barw2(c: number, max: number) {
   return (c / Math.max(1, max ?? 1) * 100).toFixed(1) + '%'
 }
 
 function cellClass(x: any) {
   const r = maxCount.value ? x.count / maxCount.value : 0
+  if (x.count === 0) return 'zero'
+  if (r >= 0.75) return 'hot4'
+  if (r >= 0.5) return 'hot3'
+  if (r >= 0.25) return 'hot2'
+  return 'hot1'
+}
+
+function cellClassRoot(x: any) {
+  const r = maxRootCount.value ? x.count / maxRootCount.value : 0
   if (x.count === 0) return 'zero'
   if (r >= 0.75) return 'hot4'
   if (r >= 0.5) return 'hot3'
@@ -292,7 +415,21 @@ async function loadRoots() {
   } finally { rootsLoading.value = false }
 }
 
-function onGameChange() { load(); loadRoots() }
+async function loadRootStats() {
+  if (!drawType.value) return
+  rootStatsLoading.value = true; rootStatsError.value = ''
+  try {
+    const res = await api.get('/api/root-statistics', {
+      params: { draw_type: drawType.value, days: rootDays.value } })
+    if (res.data.error) { rootStatsError.value = res.data.error; rootStats.value = null }
+    else rootStats.value = res.data
+  } catch (e: any) {
+    rootStatsError.value = e.response?.data?.error || e.message
+    rootStats.value = null
+  } finally { rootStatsLoading.value = false }
+}
+
+function onGameChange() { load(); loadRoots(); loadRootStats() }
 
 onMounted(async () => {
   try {
@@ -302,6 +439,7 @@ onMounted(async () => {
       drawType.value = types.value[0].display_name
       await load()
       await loadRoots()
+      await loadRootStats()
     }
   } catch (e: any) { error.value = e.response?.data?.error || e.message }
 })
@@ -325,6 +463,10 @@ onMounted(async () => {
 }
 @media (max-width: 900px) { .grid90 { grid-template-columns: repeat(10, 1fr); } }
 @media (max-width: 600px) { .grid90 { grid-template-columns: repeat(6, 1fr); } }
+.grid9 {
+  display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px;
+}
+@media (max-width: 600px) { .grid9 { grid-template-columns: repeat(3, 1fr); } }
 .cell {
   display: flex; flex-direction: column; align-items: center;
   border-radius: 6px; padding: 4px 2px; font-size: 11px; cursor: default;

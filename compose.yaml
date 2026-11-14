@@ -1,26 +1,27 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
-      LOTTERY_DATABASE_NAME: ${LOTTERY_DATABASE_NAME:-lottery_platform}
-      LOTTERY_DATABASE_USER: ${LOTTERY_DATABASE_USER:-directus}
-    ports:
-      - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5430}:5432"
-    volumes:
-      - lottery-db:/var/lib/postgresql/data
-      - ./infrastructure/postgres/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
-      - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d/migrations:ro
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres service disabled - using local PostgreSQL on port 5432
+  # postgres:
+  #   image: postgres:17-alpine
+  #   environment:
+  #     POSTGRES_DB: postgres
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: ${LOTTERY_DATABASE_PASSWORD:?Set LOTTERY_DATABASE_PASSWORD in .env}
+  #     LOTTERY_DATABASE_NAME: ${LOTTERY_DATABASE_NAME:-lottery_platform}
+  #     LOTTERY_DATABASE_USER: ${LOTTERY_DATABASE_USER:-directus}
+  #   ports:
+  #     - "127.0.0.1:${LOTTERY_DATABASE_PORT:-5430}:5432"
+  #   volumes:
+  #     - lottery-db:/var/lib/postgresql/data
+  #     - ./infrastructure/postgres/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+  #     - ./infrastructure/postgres/migrations:/docker-entrypoint-initdb.d/migrations:ro
+  #   restart: unless-stopped
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
   raw-storage:
     image: pgsty/minio:RELEASE.2026-06-18T00-00-00Z
@@ -43,7 +44,7 @@ services:
       dockerfile: Dockerfile
     command: ["python", "-m", "lottery_intelligence_platform.api", "--host", "0.0.0.0", "--port", "8091"]
     environment:
-      LOTTERY_DATABASE_HOST: postgres
+      LOTTERY_DATABASE_HOST: host.docker.internal
       LOTTERY_DATABASE_PORT: 5432
       LOTTERY_DATABASE_NAME: ${LOTTERY_DATABASE_NAME:-lottery_platform}
       LOTTERY_DATABASE_USER: ${LOTTERY_DATABASE_USER:-directus}
@@ -53,18 +54,18 @@ services:
       LOTTERY_S3_REGION: ${LOTTERY_S3_REGION:-us-east-1}
       LOTTERY_S3_ACCESS_KEY: ${LOTTERY_S3_ACCESS_KEY:?Set LOTTERY_S3_ACCESS_KEY in .env}
       LOTTERY_S3_SECRET_KEY: ${LOTTERY_S3_SECRET_KEY:?Set LOTTERY_S3_SECRET_KEY in .env}
-      LOTTERY_API_TOKEN: ${LOTTERY_API_TOKEN:-}
+      LOTTERY_API_TOKEN: ""
     ports:
       - "8091:8091"
     depends_on:
-      postgres:
-        condition: service_healthy
       raw-storage:
         condition: service_started
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
-  lottery-db:
+  # lottery-db:  # Not used - using local PostgreSQL
   lottery-raw-data:

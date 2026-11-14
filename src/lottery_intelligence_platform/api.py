@@ -14,7 +14,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -723,6 +723,151 @@ class ApiHandler(BaseHTTPRequestHandler):
             "top_pairs": pairs,
         }
 
+    def _root_statistics(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Per-root frequency / delay stats for one draw type (same format as _statistics)."""
+        from lottery_intelligence_platform.digital_root import digital_root
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        days = int((qs.get("days") or ["0"])[0])
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt_row = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+                if dt_row is None:
+                    return {"error": f"unknown draw_type: {draw_type}"}
+            else:
+                dt_row = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+            draw_type_id, display_name = dt_row
+            clause = "AND d.scheduled_date >= CURRENT_DATE - %s" if days > 0 else ""
+            params: tuple[Any, ...] = (draw_type_id, days) if days > 0 else (draw_type_id,)
+            rows = conn.execute(
+                f"""SELECT d.scheduled_date, d.scheduled_sequence, n.number, n.position
+                    FROM core.draws d
+                    JOIN core.draw_versions v
+                      ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                    JOIN core.draw_numbers n
+                      ON n.draw_version_id = v.draw_version_id
+                     AND n.number_role = 'WINNING'
+                    WHERE d.draw_type_id = %s {clause}
+                    ORDER BY d.scheduled_date DESC, d.scheduled_sequence, n.position""",
+                params,
+            ).fetchall()
+        draw_keys = sorted({(r[0], r[1]) for r in rows}, reverse=True)
+        draw_count = len(draw_keys)
+        key_rank = {k: i for i, k in enumerate(draw_keys)}
+        counts = {r: 0 for r in range(9)}  # 0-8 (9 maps to 0)
+        first_two = {r: 0 for r in range(9)}
+        last_rank = {r: None for r in range(9)}
+        last_date: dict[int, date | None] = {r: None for r in range(9)}
+        by_draw: dict[tuple[date, int], list[int]] = {}
+        for draw_date, seq, number, position in rows:
+            root = digital_root(number)
+            counts[root] += 1
+            if position is not None and position <= 2:
+                first_two[root] += 1
+            by_draw.setdefault((draw_date, seq), []).append(root)
+            rank = key_rank[(draw_date, seq)]
+            if last_rank[root] is None or rank < last_rank[root]:
+                last_rank[root] = rank
+                last_date[root] = draw_date
+        # Pair co-occurrence for roots (9 roots = 36 pairs)
+        draw_sets = [set(nums) for nums in by_draw.values()]
+        pair_last: dict[tuple[int, int], date] = {}
+        pair_counts_all: dict[tuple[int, int], int] = {}
+        for draw_key, nums in by_draw.items():
+            nums = sorted(set(nums))
+            for i in range(len(nums)):
+                for j in range(i + 1, len(nums)):
+                    pair = (nums[i], nums[j])
+                    pair_counts_all[pair] = pair_counts_all.get(pair, 0) + 1
+                    pair_last.setdefault(pair, draw_key[0])
+        # Statistical tests for root pairs
+        from scipy.stats import binomtest
+        n_hypotheses = 9 * 8 // 2  # 36 pairs
+        tested = []
+        for (a, b), observed in pair_counts_all.items():
+            # Expected probability for a pair in 5-number draw from 9 roots
+            # P(pair in draw) = sum(k=2 to 5) C(7, k-2) / C(9, k) ≈ 0.2778
+            expected = draw_count * 0.2778
+            if observed > expected:
+                p_val = binomtest(observed, draw_count, 0.2778, alternative='greater').pvalue
+                lift = observed / expected if expected else 0
+                tested.append({
+                    "pair": (a, b),
+                    "observed": observed,
+                    "expected": expected,
+                    "lift": lift,
+                    "p_value": p_val,
+                })
+        # FDR correction
+        from statsmodels.stats.multitest import multipletests
+        pvals = [r["p_value"] for r in tested] + [1.0] * (n_hypotheses - len(tested))
+        qvals = multipletests(pvals, method='fdr_bh')[1]
+        for entry, q in zip(tested, qvals):
+            entry["q_fdr"] = q
+            a, b = entry["pair"]
+            entry["last_date"] = pair_last[(a, b)].isoformat()
+        pairs = [
+            {"pair": list(t["pair"]), "count": t["observed"],
+             "expected": t["expected"], "lift": t["lift"],
+             "p_value": t["p_value"], "q_fdr": t["q_fdr"],
+             "last_date": t["last_date"]}
+            for t in sorted(tested, key=lambda x: x["lift"], reverse=True)[:12]
+        ]
+        if not pairs:
+            pairs = [
+                {"pair": [a, b], "count": c, "expected": draw_count * 0.2778,
+                 "lift": None, "p_value": None, "q_fdr": None,
+                 "last_date": pair_last[(a, b)].isoformat()}
+                for (a, b), c in sorted(
+                    pair_counts_all.items(), key=lambda kv: (-kv[1], kv[0]))[:12]
+            ]
+        first_two_ranked = [
+            {"number": r, "count": c}
+            for r, c in sorted(first_two.items(), key=lambda kv: (-kv[1], kv[0]))
+            if c > 0
+        ]
+        observed = [counts[r] for r in range(9)]
+        total = sum(observed)
+        expected = total / 9 if total else 0.0
+        chi2 = (sum((o - expected) ** 2 / expected for o in observed)
+                if expected else 0.0)
+        p_value = chi_square_sf(chi2, 8) if expected else None
+        roots = [
+            {"number": r, "count": counts[r],
+             "delay": last_rank[r] if last_rank[r] is not None else draw_count,
+             "last_date": last_date[r].isoformat() if last_date[r] else None,
+             "deviation": (counts[r] - expected) if expected else 0.0}
+            for r in range(9)
+        ]
+        by_count = sorted(roots, key=lambda x: (-x["count"], x["number"]))
+        return {
+            "draw_type": display_name,
+            "days": days or None,
+            "draw_count": draw_count,
+            "expected_per_number": expected,
+            "chi_square": chi2,
+            "df": 8,
+            "p_value": p_value,
+            "uniform": p_value is not None and p_value >= 0.05,
+            "numbers": roots,
+            "hot": by_count[:5],
+            "cold": by_count[-5:],
+            "max_delay": max(roots, key=lambda x: x["delay"]),
+            "first_two": first_two_ranked,
+            "first_two_expected": draw_count * 2 / 9 if draw_count else 0.0,
+            "top_pairs": pairs,
+        }
+
     def _digital_root_statistics(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """Digital root descriptive statistics (10/30/45/60/90 days) for one game."""
         draw_type = (qs.get("draw_type") or [None])[0]
@@ -1330,6 +1475,675 @@ class ApiHandler(BaseHTTPRequestHandler):
 
             return result
 
+    def _digital_root_turbo_predictions(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Digital root Turbo predictions for games (Turbo 2 and Turbo 5)."""
+        from lottery_intelligence_platform.digital_root_analyzer import DigitalRootTurboAnalyzer
+        from lottery_intelligence_platform.betting_formulas import TURBO_FORMULAS
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        date_str = (qs.get("date") or [None])[0]
+        variant = (qs.get("variant") or ["turbo_2"])[0]
+
+        if date_str:
+            try:
+                target_date = date.fromisoformat(date_str)
+            except ValueError:
+                return {"error": f"invalid date: {date_str}"}
+        else:
+            target_date = date.today()
+
+        if variant not in ["turbo_2", "turbo_5"]:
+            return {"error": "variant must be turbo_2 or turbo_5"}
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+
+            draw_type_id, display_name = dt
+
+            # Generate prediction using Digital Root Turbo Analyzer
+            analyzer = DigitalRootTurboAnalyzer(
+                observation_window_days=3,
+                min_observations=5,
+                default_turbo_variant=variant,
+            )
+
+            try:
+                prediction = analyzer.predict(
+                    conn,
+                    draw_type_id,
+                    target_date,
+                    turbo_variant=variant,
+                    top_roots=5,
+                    candidates_per_root=10,
+                )
+            except Exception as e:
+                return {"error": f"prediction failed: {str(e)[:200]}"}
+
+            # Get Turbo formula for numbers required
+            formula = TURBO_FORMULAS.get(f"TURBO_{variant.replace('turbo_', '').upper()}")
+            numbers_required = formula.numbers_required if formula else 2
+
+            # Format output
+            return {
+                "draw_type": display_name,
+                "target_date": str(target_date),
+                "variant": variant,
+                "numbers_required": numbers_required,
+                "predicted_roots": [
+                    {
+                        "root": p.root,
+                        "confidence": p.confidence,
+                        "uncertainty_level": p.uncertainty_level,
+                        "observation_window_days": p.observation_window_days,
+                        "comparison_to_random": p.comparison_to_random,
+                    }
+                    for p in prediction.predicted_roots
+                ],
+                "turbo_candidates": [
+                    {
+                        "number": c.number,
+                        "root": c.root,
+                        "rank_in_family": c.rank_in_family,
+                        "historical_frequency": c.historical_frequency,
+                        "adjusted_score": c.adjusted_score,
+                    }
+                    for c in prediction.turbo_candidates
+                ],
+                "final_selection": prediction.get_final_selection(numbers_required),
+                "metadata": prediction.metadata,
+            }
+
+    def _digital_root_turbo_daily(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Daily digital root Turbo predictions for all games with official results."""
+        from lottery_intelligence_platform.digital_root_analyzer import DigitalRootTurboAnalyzer
+        from lottery_intelligence_platform.betting_formulas import TURBO_FORMULAS
+        from lottery_intelligence_platform.digital_root import digital_root
+
+        date_str = (qs.get("date") or [None])[0]
+        if date_str:
+            try:
+                target_date = date.fromisoformat(date_str)
+            except ValueError:
+                return {"error": f"invalid date: {date_str}"}
+        else:
+            target_date = date.today()
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            # Get all draw types
+            draw_types = conn.execute(
+                """SELECT dt.draw_type_id, dt.display_name, dt.code
+                   FROM catalog.draw_types dt
+                   ORDER BY dt.display_name"""
+            ).fetchall()
+
+            # Get draws for the target date
+            draws = conn.execute(
+                """SELECT d.draw_id, d.draw_type_id, d.scheduled_date, d.status,
+                          dv.validation_status, dv.version_number, dv.draw_version_id
+                   FROM core.draws d
+                   LEFT JOIN core.draw_versions dv
+                     ON dv.draw_id = d.draw_id
+                    AND dv.version_number = (
+                        SELECT MAX(version_number) FROM core.draw_versions v2
+                        WHERE v2.draw_id = d.draw_id
+                    )
+                   WHERE d.scheduled_date = %s
+                   ORDER BY d.scheduled_sequence""",
+                (target_date,),
+            ).fetchall()
+
+            # Get winning numbers for settled draws
+            draw_ids = [d[0] for d in draws]
+            winning_numbers = {}
+            if draw_ids:
+                win_rows = conn.execute(
+                    """SELECT dv.draw_version_id, dn.number, dn.position
+                       FROM core.draw_numbers dn
+                       JOIN core.draw_versions dv ON dv.draw_version_id = dn.draw_version_id
+                       WHERE dv.validation_status = 'VALID'
+                         AND dn.number_role = 'WINNING'
+                         AND dv.draw_id = ANY(%s)
+                       ORDER BY dv.draw_id, dn.position""",
+                    (draw_ids,),
+                ).fetchall()
+                for dv_id, number, position in win_rows:
+                    if dv_id not in winning_numbers:
+                        winning_numbers[dv_id] = []
+                    winning_numbers[dv_id].append(number)
+
+            analyzer = DigitalRootTurboAnalyzer(
+                observation_window_days=3,
+                min_observations=5,
+            )
+
+            daily_predictions = []
+            for draw_id, draw_type_id, scheduled_date, status, validation_status, version_number, dv_id in draws:
+                draw_type = next((dt for dt in draw_types if dt[0] == draw_type_id), None)
+                if not draw_type:
+                    continue
+
+                draw_type_id, display_name, code = draw_type
+
+                # Get winning numbers if available
+                actual_numbers = None
+                actual_roots = None
+                if status == 'SETTLED' and validation_status == 'VALID' and dv_id:
+                    actual_numbers = winning_numbers.get(dv_id, [])
+                    actual_roots = [digital_root(n) for n in actual_numbers] if actual_numbers else None
+
+                # Generate predictions for Turbo 2 and Turbo 5
+                predictions = {}
+                for variant in ["turbo_2", "turbo_5"]:
+                    try:
+                        pred = analyzer.predict(
+                            conn,
+                            draw_type_id,
+                            target_date,
+                            turbo_variant=variant,
+                            top_roots=5,
+                            candidates_per_root=10,
+                        )
+                        formula = TURBO_FORMULAS.get(f"TURBO_{variant.replace('turbo_', '').upper()}")
+                        numbers_required = formula.numbers_required if formula else 2
+
+                        predictions[variant] = {
+                            "predicted_roots": [p.root for p in pred.predicted_roots],
+                            "final_selection": pred.get_final_selection(numbers_required),
+                            "numbers_required": numbers_required,
+                        }
+                    except Exception as e:
+                        predictions[variant] = {"error": str(e)[:100]}
+
+                # Generate adaptive root prediction
+                from lottery_intelligence_platform.adaptive_root_predictor import AdaptiveRootPredictor
+                try:
+                    adaptive_predictor = AdaptiveRootPredictor(min_observations=5)
+                    # Load historical data for adaptive predictor
+                    historical_draws = conn.execute(
+                        """SELECT d.scheduled_date, dn.number
+                           FROM core.draws d
+                           JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+                           JOIN core.draw_numbers dn ON dn.draw_version_id = dv.draw_version_id
+                           WHERE d.draw_type_id = %s
+                             AND dv.validation_status = 'VALID'
+                             AND dn.number_role = 'WINNING'
+                             AND d.scheduled_date < %s
+                           ORDER BY d.scheduled_date DESC, d.scheduled_sequence, dn.position
+                           LIMIT 200""",
+                        (draw_type_id, target_date),
+                    ).fetchall()
+
+                    # Group by draw
+                    draws_dict = {}
+                    for scheduled_date, number in historical_draws:
+                        if scheduled_date not in draws_dict:
+                            draws_dict[scheduled_date] = []
+                        draws_dict[scheduled_date].append(number)
+
+                    draw_records = [
+                        {"scheduled_date": d, "numbers": nums}
+                        for d, nums in draws_dict.items()
+                    ]
+
+                    adaptive_predictor.learn_from_history(draw_records)
+
+                    # Extract hour from target_date
+                    draw_hour = target_date.hour if isinstance(target_date, datetime) else 7
+
+                    adaptive_pred = adaptive_predictor.predict_adaptive(
+                        target_date=target_date,
+                        draw_type=display_name,
+                        target_hour=draw_hour,
+                        top_roots=5,
+                    )
+
+                    predictions["adaptive"] = {
+                        "predicted_roots": adaptive_pred.predicted_roots,
+                        "confidence": adaptive_pred.confidence,
+                        "reasoning": adaptive_pred.reasoning,
+                    }
+                except Exception as e:
+                    predictions["adaptive"] = {"error": str(e)[:100]}
+
+                daily_predictions.append({
+                    "draw_id": str(draw_id),
+                    "draw_type": display_name,
+                    "draw_type_code": code,
+                    "scheduled_date": str(scheduled_date),
+                    "status": status,
+                    "validation_status": validation_status,
+                    "actual_numbers": actual_numbers,
+                    "actual_roots": actual_roots,
+                    "predictions": predictions,
+                })
+
+            return {
+                "date": str(target_date),
+                "total_games": len(daily_predictions),
+                "predictions": daily_predictions,
+            }
+
+    def _digital_root_turbo_range(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Digital root Turbo predictions for a date range with optional game filter."""
+        from lottery_intelligence_platform.digital_root_analyzer import DigitalRootTurboAnalyzer
+        from lottery_intelligence_platform.betting_formulas import TURBO_FORMULAS
+        from lottery_intelligence_platform.digital_root import digital_root
+
+        start_date_str = (qs.get("start_date") or [None])[0]
+        end_date_str = (qs.get("end_date") or [None])[0]
+        draw_type = (qs.get("draw_type") or [None])[0]
+
+        if start_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+            except ValueError:
+                return {"error": f"invalid start_date: {start_date_str}"}
+        else:
+            start_date = date.today() - timedelta(days=7)
+
+        if end_date_str:
+            try:
+                end_date = date.fromisoformat(end_date_str)
+            except ValueError:
+                return {"error": f"invalid end_date: {end_date_str}"}
+        else:
+            end_date = date.today()
+
+        if start_date > end_date:
+            return {"error": "start_date must be before or equal to end_date"}
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            # Get draw type filter
+            draw_type_filter = ""
+            draw_type_params = []
+            if draw_type:
+                draw_type_filter = "AND (dt.code = %s OR dt.display_name = %s)"
+                draw_type_params = [draw_type, draw_type]
+
+            # Get draws for the date range
+            draws = conn.execute(
+                f"""SELECT d.draw_id, d.draw_type_id, d.scheduled_date, d.status,
+                          dv.validation_status, dv.version_number, dv.draw_version_id,
+                          dt.display_name, dt.code
+                   FROM core.draws d
+                   LEFT JOIN core.draw_versions dv
+                     ON dv.draw_id = d.draw_id
+                    AND dv.version_number = (
+                        SELECT MAX(version_number) FROM core.draw_versions v2
+                        WHERE v2.draw_id = d.draw_id
+                    )
+                   JOIN catalog.draw_types dt ON dt.draw_type_id = d.draw_type_id
+                   WHERE d.scheduled_date BETWEEN %s AND %s
+                   {draw_type_filter}
+                   ORDER BY d.scheduled_date, d.scheduled_sequence""",
+                (start_date, end_date, *draw_type_params),
+            ).fetchall()
+
+            # Get winning numbers for settled draws
+            draw_ids = [d[0] for d in draws]
+            winning_numbers = {}
+            if draw_ids:
+                win_rows = conn.execute(
+                    """SELECT dv.draw_version_id, dn.number, dn.position
+                       FROM core.draw_numbers dn
+                       JOIN core.draw_versions dv ON dv.draw_version_id = dn.draw_version_id
+                       WHERE dv.validation_status = 'VALID'
+                         AND dn.number_role = 'WINNING'
+                         AND dv.draw_id = ANY(%s)
+                       ORDER BY dv.draw_id, dn.position""",
+                    (draw_ids,),
+                ).fetchall()
+                for dv_id, number, position in win_rows:
+                    if dv_id not in winning_numbers:
+                        winning_numbers[dv_id] = []
+                    winning_numbers[dv_id].append(number)
+
+            analyzer = DigitalRootTurboAnalyzer(
+                observation_window_days=3,
+                min_observations=5,
+            )
+
+            daily_predictions = []
+            for draw_id, draw_type_id, scheduled_date, status, validation_status, version_number, dv_id, display_name, code in draws:
+                # Get winning numbers if available
+                actual_numbers = None
+                actual_roots = None
+                if status == 'SETTLED' and validation_status == 'VALID' and dv_id:
+                    actual_numbers = winning_numbers.get(dv_id, [])
+                    actual_roots = [digital_root(n) for n in actual_numbers] if actual_numbers else None
+
+                # Generate predictions for Turbo 2 and Turbo 5
+                predictions = {}
+                for variant in ["turbo_2", "turbo_5"]:
+                    try:
+                        pred = analyzer.predict(
+                            conn,
+                            draw_type_id,
+                            scheduled_date,
+                            turbo_variant=variant,
+                            top_roots=5,
+                            candidates_per_root=10,
+                        )
+                        formula = TURBO_FORMULAS.get(f"TURBO_{variant.replace('turbo_', '').upper()}")
+                        numbers_required = formula.numbers_required if formula else 2
+
+                        predictions[variant] = {
+                            "predicted_roots": [p.root for p in pred.predicted_roots],
+                            "final_selection": pred.get_final_selection(numbers_required),
+                            "numbers_required": numbers_required,
+                        }
+                    except Exception as e:
+                        predictions[variant] = {"error": str(e)[:100]}
+
+                # Generate adaptive root prediction
+                from lottery_intelligence_platform.adaptive_root_predictor import AdaptiveRootPredictor
+                try:
+                    adaptive_predictor = AdaptiveRootPredictor(min_observations=5)
+                    # Load historical data for adaptive predictor
+                    historical_draws = conn.execute(
+                        """SELECT d.scheduled_date, dn.number
+                           FROM core.draws d
+                           JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+                           JOIN core.draw_numbers dn ON dn.draw_version_id = dv.draw_version_id
+                           WHERE d.draw_type_id = %s
+                             AND dv.validation_status = 'VALID'
+                             AND dn.number_role = 'WINNING'
+                             AND d.scheduled_date < %s
+                           ORDER BY d.scheduled_date DESC, d.scheduled_sequence, dn.position
+                           LIMIT 200""",
+                        (draw_type_id, scheduled_date),
+                    ).fetchall()
+
+                    # Group by draw
+                    draws_dict = {}
+                    for scheduled_date, number in historical_draws:
+                        if scheduled_date not in draws_dict:
+                            draws_dict[scheduled_date] = []
+                        draws_dict[scheduled_date].append(number)
+
+                    draw_records = [
+                        {"scheduled_date": d, "numbers": nums}
+                        for d, nums in draws_dict.items()
+                    ]
+
+                    adaptive_predictor.learn_from_history(draw_records)
+
+                    # Extract hour from scheduled_date
+                    draw_hour = scheduled_date.hour if isinstance(scheduled_date, datetime) else 7
+
+                    adaptive_pred = adaptive_predictor.predict_adaptive(
+                        target_date=scheduled_date,
+                        draw_type=display_name,
+                        target_hour=draw_hour,
+                        top_roots=5,
+                    )
+
+                    predictions["adaptive"] = {
+                        "predicted_roots": adaptive_pred.predicted_roots,
+                        "confidence": adaptive_pred.confidence,
+                        "reasoning": adaptive_pred.reasoning,
+                    }
+                except Exception as e:
+                    predictions["adaptive"] = {"error": str(e)[:100]}
+
+                daily_predictions.append({
+                    "draw_id": str(draw_id),
+                    "draw_type": display_name,
+                    "draw_type_code": code,
+                    "scheduled_date": str(scheduled_date),
+                    "status": status,
+                    "validation_status": validation_status,
+                    "actual_numbers": actual_numbers,
+                    "actual_roots": actual_roots,
+                    "predictions": predictions,
+                })
+
+            return {
+                "start_date": str(start_date),
+                "end_date": str(end_date),
+                "total_games": len(daily_predictions),
+                "predictions": daily_predictions,
+            }
+
+    def _adaptive_root_predict(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Generate adaptive root prediction using machine learning."""
+        from lottery_intelligence_platform.adaptive_root_predictor import AdaptiveRootPredictor
+        from lottery_intelligence_platform.digital_root import digital_root
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        date_str = (qs.get("date") or [None])[0]
+        hour_str = (qs.get("hour") or [None])[0]
+        top_roots = int((qs.get("top_roots") or ["5"])[0])
+
+        if date_str:
+            try:
+                target_date = date.fromisoformat(date_str)
+            except ValueError:
+                return {"error": f"invalid date: {date_str}"}
+        else:
+            target_date = date.today()
+
+        target_hour = int(hour_str) if hour_str else None
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            # Load historical data for training
+            if draw_type:
+                dt = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+
+            draw_type_id, display_name = dt
+
+            # Load historical draws
+            draws = conn.execute(
+                """SELECT d.scheduled_date, dn.number
+                   FROM core.draws d
+                   JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+                   JOIN core.draw_numbers dn ON dn.draw_version_id = dv.draw_version_id
+                   WHERE d.draw_type_id = %s
+                     AND dv.validation_status = 'VALID'
+                     AND dn.number_role = 'WINNING'
+                     AND d.scheduled_date < %s
+                   ORDER BY d.scheduled_date DESC, d.scheduled_sequence, dn.position
+                   LIMIT 200""",
+                (draw_type_id, target_date),
+            ).fetchall()
+
+            # Group by draw
+            draws_dict = {}
+            for scheduled_date, number in draws:
+                if scheduled_date not in draws_dict:
+                    draws_dict[scheduled_date] = []
+                draws_dict[scheduled_date].append(number)
+
+            # Convert to list of dicts
+            draw_records = [
+                {"scheduled_date": d, "numbers": nums}
+                for d, nums in draws_dict.items()
+            ]
+
+            # Create and train predictor
+            predictor = AdaptiveRootPredictor(min_observations=5)
+            predictor.learn_from_history(draw_records)
+
+            # Generate prediction
+            prediction = predictor.predict_adaptive(
+                target_date=target_date,
+                draw_type=display_name,
+                target_hour=target_hour,
+                top_roots=top_roots,
+            )
+
+            return {
+                "draw_type": display_name,
+                "target_date": str(target_date),
+                "target_hour": target_hour,
+                "predicted_roots": prediction.predicted_roots,
+                "confidence": prediction.confidence,
+                "reasoning": prediction.reasoning,
+                "adaptive_factors": prediction.adaptive_factors,
+            }
+
+    def _adaptive_root_train(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Train the adaptive predictor on historical data."""
+        from lottery_intelligence_platform.adaptive_root_predictor import AdaptiveRootPredictor
+        from lottery_intelligence_platform.digital_root import digital_root
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+        days_back = int((qs.get("days_back") or ["30"])[0])
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+
+            draw_type_id, display_name = dt
+
+            # Load historical draws
+            cutoff_date = date.today() - timedelta(days=days_back)
+            draws = conn.execute(
+                """SELECT d.scheduled_date, dn.number
+                   FROM core.draws d
+                   JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+                   JOIN core.draw_numbers dn ON dn.draw_version_id = dv.draw_version_id
+                   WHERE d.draw_type_id = %s
+                     AND dv.validation_status = 'VALID'
+                     AND dn.number_role = 'WINNING'
+                     AND d.scheduled_date >= %s
+                   ORDER BY d.scheduled_date, d.scheduled_sequence, dn.position""",
+                (draw_type_id, cutoff_date),
+            ).fetchall()
+
+            # Group by draw
+            draws_dict = {}
+            for scheduled_date, number in draws:
+                if scheduled_date not in draws_dict:
+                    draws_dict[scheduled_date] = []
+                draws_dict[scheduled_date].append(number)
+
+            # Convert to list of dicts
+            draw_records = [
+                {"scheduled_date": d, "numbers": nums}
+                for d, nums in draws_dict.items()
+            ]
+
+            # Create and train predictor
+            predictor = AdaptiveRootPredictor(min_observations=5)
+            predictor.learn_from_history(draw_records)
+
+            return {
+                "draw_type": display_name,
+                "training_period_days": days_back,
+                "draws_trained_on": len(draw_records),
+                "statistics": predictor.get_statistics(),
+            }
+
+    def _adaptive_root_stats(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Get current adaptive predictor statistics."""
+        from lottery_intelligence_platform.adaptive_root_predictor import AdaptiveRootPredictor
+
+        draw_type = (qs.get("draw_type") or [None])[0]
+
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    """SELECT draw_type_id, display_name FROM catalog.draw_types
+                       WHERE code = %s OR display_name = %s""",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    """SELECT dt.draw_type_id, dt.display_name
+                       FROM catalog.draw_types dt
+                       ORDER BY (SELECT count(*) FROM core.draws d
+                                 WHERE d.draw_type_id = dt.draw_type_id) DESC
+                       LIMIT 1""",
+                ).fetchone()
+
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+
+            draw_type_id, display_name = dt
+
+            # Load historical draws
+            draws = conn.execute(
+                """SELECT d.scheduled_date, dn.number
+                   FROM core.draws d
+                   JOIN core.draw_versions dv ON dv.draw_id = d.draw_id
+                   JOIN core.draw_numbers dn ON dn.draw_version_id = dv.draw_version_id
+                   WHERE d.draw_type_id = %s
+                     AND dv.validation_status = 'VALID'
+                     AND dn.number_role = 'WINNING'
+                   ORDER BY d.scheduled_date DESC, d.scheduled_sequence, dn.position
+                   LIMIT 200""",
+                (draw_type_id,),
+            ).fetchall()
+
+            # Group by draw
+            draws_dict = {}
+            for scheduled_date, number in draws:
+                if scheduled_date not in draws_dict:
+                    draws_dict[scheduled_date] = []
+                draws_dict[scheduled_date].append(number)
+
+            # Convert to list of dicts
+            draw_records = [
+                {"scheduled_date": d, "numbers": nums}
+                for d, nums in draws_dict.items()
+            ]
+
+            # Create and train predictor
+            predictor = AdaptiveRootPredictor(min_observations=5)
+            predictor.learn_from_history(draw_records)
+
+            return {
+                "draw_type": display_name,
+                "statistics": predictor.get_statistics(),
+            }
+
     def _fusion_agents(self, qs: dict[str, list[str]]) -> dict[str, Any]:
         """Decisions of the virtual fusion betting agents for one draw type.
 
@@ -1342,6 +2156,11 @@ class ApiHandler(BaseHTTPRequestHandler):
         from lottery_intelligence_platform import fusion_agents as fa
 
         draw_type = (qs.get("draw_type") or [None])[0]
+        target_date = (qs.get("date") or [None])[0]
+        status_filter = (qs.get("status") or [None])[0]
+        
+        from datetime import date as _date
+        
         with psycopg.connect(self.dsn, autocommit=True) as conn:
             if draw_type:
                 dt = conn.execute(
@@ -1360,7 +2179,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             if dt is None:
                 return {"error": f"unknown draw_type: {draw_type}"}
             draw_type_id, display_name = dt
-            rows = conn.execute(
+            
+            # Build history for predictions (always use full history for predictions)
+            history_rows = conn.execute(
                 """SELECT d.scheduled_date, d.scheduled_sequence, n.number
                    FROM core.draws d
                    JOIN core.draw_versions v
@@ -1371,44 +2192,115 @@ class ApiHandler(BaseHTTPRequestHandler):
                    ORDER BY d.scheduled_date, d.scheduled_sequence, n.position""",
                 (draw_type_id,),
             ).fetchall()
-        from datetime import date as _date
-        draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
-        for d, seq, num in rows:
-            draws.setdefault((d, seq), []).append(num)
-        history = [list(nums) for nums in draws.values()]
-        draw_dates = [str(k[0]) for k in draws.keys()]
+            
+            draws: "OrderedDict[tuple[Any, Any], list[int]]" = OrderedDict()
+            for d, seq, num in history_rows:
+                draws.setdefault((d, seq), []).append(num)
+            history = [list(nums) for nums in draws.values()]
+            draw_dates = [str(k[0]) for k in draws.keys()]
+            
+            # Get target draw if specified
+            target_draw = None
+            target_draw_date = None
+            target_draw_id = None
+            target_status = "EXPECTED"
+            if target_date:
+                target_draw_rows = conn.execute(
+                    """SELECT d.draw_id, d.scheduled_date, d.status
+                       FROM core.draws d
+                       WHERE d.draw_type_id = %s AND d.scheduled_date = %s""",
+                    (draw_type_id, target_date),
+                ).fetchall()
+                if target_draw_rows:
+                    target_draw_id, target_draw_date, target_status = target_draw_rows[0]
+            
+            # Get last draw date for display
+            last_draw_date = draw_dates[-1] if draw_dates else None
+            last_draw = history[-1] if history else []
+            last_target = _date.fromisoformat(last_draw_date) if last_draw_date else None
 
-        # walk-forward strict : l'agent décide avec l'historique SANS le dernier
-        # tirage, puis on rejoue ce dernier tirage pour afficher le résultat.
-        past = history[:-1] if len(history) > 1 else history
-        last_draw = history[-1] if history else []
-        last_draw_date = draw_dates[-1] if draw_dates else None
-        last_target = _date.fromisoformat(last_draw_date) if last_draw_date else None
-
-        rng = _random.Random(len(history))
-        decisions = []
-        for profile in fa.FUSION_AGENT_PROFILES:
-            if profile.strategy == "digital_root_turbo":
-                with psycopg.connect(self.dsn, autocommit=True) as conn2:
-                    d = fa.decide(profile, past, rng, k=5, connection=conn2,
-                                  draw_type_id=draw_type_id, target=last_target)
-            else:
-                d = fa.decide(profile, past, rng, k=5)
-            settle = fa.settle_bet(d["bet_type"], d["selected_numbers"], last_draw,
-                                   d["stake_amount"], winning_positions=last_draw)
-            decisions.append({
-                "code": d["code"],
-                "display_name": d["display_name"],
-                "strategy": d["strategy"],
-                "bet_type": d["bet_type"],
-                "selected_numbers": d["selected_numbers"],
-                "stake_amount": str(d["stake_amount"]),
-                "confidence_score": d["confidence_score"],
-                "reasoning": d["reasoning"],
-                "hits_last": len(set(d["selected_numbers"]) & set(last_draw)),
-                "outcome_last": settle.get("status"),
-                "net_result_last": float(settle.get("net_profit", 0)),
-            })
+            rng = _random.Random(len(history))
+            decisions = []
+            for profile in fa.FUSION_AGENT_PROFILES:
+                if profile.strategy == "digital_root_turbo":
+                    with psycopg.connect(self.dsn, autocommit=True) as conn2:
+                        d = fa.decide(profile, history, rng, k=5, connection=conn2,
+                                      draw_type_id=draw_type_id, target=last_target)
+                else:
+                    d = fa.decide(profile, history, rng, k=5)
+                
+                # Calculate hits if target draw is settled
+                hits = 0
+                outcome = "PENDING"
+                net_result = 0
+                if target_draw_date and target_status == "SETTLED":
+                    # Get winning numbers for target draw
+                    winning_rows = conn.execute(
+                        """SELECT n.number
+                           FROM core.draws d
+                           JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                           JOIN core.draw_numbers n ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                           WHERE d.draw_id = %s""",
+                        (target_draw_id,),
+                    ).fetchall()
+                    winning_numbers = [r[0] for r in winning_rows]
+                    hits = len(set(d["selected_numbers"]) & set(winning_numbers))
+                    outcome = "WIN" if hits > 0 else "LOSS"
+                    net_result = hits * 1000 if hits > 0 else -500  # Simple example scoring
+                
+                decisions.append({
+                    "code": d["code"],
+                    "display_name": d["display_name"],
+                    "strategy": d["strategy"],
+                    "bet_type": d["bet_type"],
+                    "selected_numbers": d["selected_numbers"],
+                    "stake_amount": str(d["stake_amount"]),
+                    "confidence_score": d["confidence_score"],
+                    "reasoning": d["reasoning"],
+                    "hits": hits,
+                    "outcome": outcome,
+                    "net_result": net_result,
+                    "target_date": target_draw_date,
+                })
+            
+            # Get winning numbers for target draw if settled
+            target_draw_numbers = []
+            if target_draw_id and target_status == "SETTLED":
+                winning_rows = conn.execute(
+                    """SELECT n.number
+                       FROM core.draws d
+                       JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                       JOIN core.draw_numbers n ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                       WHERE d.draw_id = %s""",
+                    (target_draw_id,),
+                ).fetchall()
+                target_draw_numbers = [r[0] for r in winning_rows]
+            
+            # capital virtuel persisté (edge_lab) si les agents ont été backfillés
+            try:
+                cap_rows = conn.execute(
+                    "SELECT a.code, c.current_capital, c.net_profit, c.total_bets, "
+                    "c.winning_bets, c.roi FROM edge_lab.agents a "
+                    "JOIN edge_lab.agent_capital c ON c.agent_id = a.agent_id"
+                ).fetchall()
+            except Exception:
+                cap_rows = []
+            cap = {r[0]: {"persisted_capital": float(r[1]), "persisted_profit": float(r[2]),
+                          "persisted_bets": r[3], "persisted_wins": r[4],
+                          "persisted_roi": float(r[5]) if r[5] is not None else None}
+                   for r in cap_rows}
+            for dec in decisions:
+                if dec["code"] in cap:
+                    dec.update(cap[dec["code"]])
+            
+            return {
+                "draw_type": display_name,
+                "n_draws": len(history),
+                "target_date": target_draw_date,
+                "target_status": target_status if target_date else "EXPECTED",
+                "target_draw_numbers": target_draw_numbers,
+                "agents": decisions,
+            }
         # capital virtuel persisté (edge_lab) si les agents ont été backfillés
         try:
             with psycopg.connect(self.dsn, autocommit=True) as conn2:
@@ -1426,11 +2318,26 @@ class ApiHandler(BaseHTTPRequestHandler):
         for dec in decisions:
             if dec["code"] in cap:
                 dec.update(cap[dec["code"]])
+        
+        # Get winning numbers for target draw if settled
+        target_draw_numbers = []
+        if target_draw_id and target_status == "SETTLED":
+            winning_rows = conn.execute(
+                """SELECT n.number
+                   FROM core.draws d
+                   JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                   WHERE d.draw_id = %s""",
+                (target_draw_id,),
+            ).fetchall()
+            target_draw_numbers = [r[0] for r in winning_rows]
+        
         return {
             "draw_type": display_name,
             "n_draws": len(history),
-            "last_draw_date": last_draw_date,
-            "last_draw_numbers": last_draw,
+            "target_date": target_draw_date,
+            "target_status": target_status if target_date else "EXPECTED",
+            "target_draw_numbers": target_draw_numbers,
             "agents": decisions,
         }
 
@@ -1492,12 +2399,47 @@ class ApiHandler(BaseHTTPRequestHandler):
         detail["n_draws"] = len(history)
         return detail
 
+    def _draws_by_date(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Get all draw types for a specific date."""
+        date = (qs.get("date") or [None])[0]
+        if not date:
+            return {"error": "date parameter required"}
+        
+        try:
+            from datetime import date as _date
+            _date.fromisoformat(date)
+        except ValueError:
+            return {"error": "date must be YYYY-MM-DD"}
+        
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            rows = conn.execute(
+                """SELECT DISTINCT dt.draw_type_id, dt.code, dt.display_name, d.status, d.scheduled_date
+                   FROM catalog.draw_types dt
+                   JOIN core.draws d ON d.draw_type_id = dt.draw_type_id
+                   WHERE d.scheduled_date = %s
+                   ORDER BY dt.display_name""",
+                (date,),
+            ).fetchall()
+        
+        return {
+            "data": [
+                {
+                    "draw_type_id": r[0],
+                    "code": r[1],
+                    "display_name": r[2],
+                    "status": r[3],
+                    "scheduled_date": str(r[4])
+                }
+                for r in rows
+            ]
+        }
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if not url.path.startswith("/api"):
             self._serve_static(url.path)
             return
-        if self.token is not None:
+        if self.token is not None and self.token != "":
             auth = self.headers.get("Authorization", "")
             if auth != f"Bearer {self.token}":
                 self._send({"error": "unauthorized"}, 401)
@@ -1587,6 +2529,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             if url.path == "/api/statistics":
                 self._send(self._statistics(parse_qs(url.query)))
                 return
+            if url.path == "/api/root-statistics":
+                self._send(self._root_statistics(parse_qs(url.query)))
+                return
             if url.path == "/api/digital-root-statistics":
                 self._send(self._digital_root_statistics(parse_qs(url.query)))
                 return
@@ -1617,8 +2562,29 @@ class ApiHandler(BaseHTTPRequestHandler):
             if url.path == "/api/digital-root-stats/summary":
                 self._send(self._digital_root_stats(parse_qs(url.query)))
                 return
+            if url.path == "/api/digital-root-turbo/predictions":
+                self._send(self._digital_root_turbo_predictions(parse_qs(url.query)))
+                return
+            if url.path == "/api/digital-root-turbo/daily":
+                self._send(self._digital_root_turbo_daily(parse_qs(url.query)))
+                return
+            if url.path == "/api/digital-root-turbo/range":
+                self._send(self._digital_root_turbo_range(parse_qs(url.query)))
+                return
+            if url.path == "/api/adaptive-root/predict":
+                self._send(self._adaptive_root_predict(parse_qs(url.query)))
+                return
+            if url.path == "/api/adaptive-root/train":
+                self._send(self._adaptive_root_train(parse_qs(url.query)))
+                return
+            if url.path == "/api/adaptive-root/stats":
+                self._send(self._adaptive_root_stats(parse_qs(url.query)))
+                return
             if url.path == "/api/fusion/agent-detail":
                 self._send(self._fusion_agent_detail(parse_qs(url.query)))
+                return
+            if url.path == "/api/lab/draws-by-date":
+                self._send(self._draws_by_date(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:
@@ -1665,8 +2631,8 @@ def main() -> int:
     parser.add_argument("--dsn", default=os.environ.get("LOTTERY_DB_DSN") or _env_dsn())
     args = parser.parse_args()
     ApiHandler.dsn = args.dsn
-    ApiHandler.token = os.environ.get("LOTTERY_API_TOKEN") or None
-    if ApiHandler.token is None and args.host != "127.0.0.1":
+    ApiHandler.token = os.environ.get("LOTTERY_API_TOKEN") or ""
+    if ApiHandler.token == "" and args.host != "127.0.0.1":
         print("warning: no LOTTERY_API_TOKEN set on a non-loopback bind",
               file=sys.stderr)
     server = ThreadingHTTPServer((args.host, args.port), ApiHandler)
