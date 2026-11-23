@@ -372,6 +372,57 @@
         </template>
       </div>
     </el-tab-pane>
+
+    <!-- Onglet Résultats et Racines -->
+    <el-tab-pane label="🎯 Résultats & Racines" name="results-roots">
+      <div class="sub" style="margin-bottom:12px">
+        Résultats officiels et racines numériques des jeux du jour.
+      </div>
+
+      <div class="panel">
+        <h3>Jeux du jour - Résultats et Racines</h3>
+        <div class="filters">
+          <input type="date" v-model="resultsDate" :max="today" />
+          <button @click="loadResultsRoots" class="csv-btn">Charger</button>
+        </div>
+
+        <div v-if="resultsLoading" class="sub">Chargement…</div>
+        <div v-else-if="resultsError" class="badge-err">{{ resultsError }}</div>
+        <template v-else-if="resultsData">
+          <div class="cards" style="margin-bottom:14px">
+            <div class="card"><div class="label">Date</div>
+              <div class="value">{{ resultsData.date }}</div></div>
+            <div class="card"><div class="label">Total jeux</div>
+              <div class="value">{{ resultsData.total_games }}</div></div>
+          </div>
+
+          <table class="data mb0">
+            <tr>
+              <th>Jeu</th>
+              <th>Statut</th>
+              <th>Résultat officiel</th>
+              <th>Racines numériques</th>
+            </tr>
+            <tr v-for="game in resultsData.predictions" :key="game.draw_id">
+              <td>{{ game.draw_type }}</td>
+              <td><span :class="game.status === 'SETTLED' ? 'badge-ok' : 'badge-warn'">{{ game.status }}</span></td>
+              <td>
+                <span v-if="game.actual_numbers">
+                  <span v-for="n in game.actual_numbers" :key="n" class="num-ball actual">{{ n }}</span>
+                </span>
+                <span v-else class="sub">—</span>
+              </td>
+              <td class="mono">
+                <span v-if="game.actual_roots">
+                  <span v-for="(root, i) in game.actual_roots" :key="i" class="num-ball root">{{ root }}</span>
+                </span>
+                <span v-else class="sub">—</span>
+              </td>
+            </tr>
+          </table>
+        </template>
+      </div>
+    </el-tab-pane>
   </el-tabs>
 </template>
 
@@ -419,6 +470,12 @@ const rangeGame = ref('')
 const rangeData = ref<any>(null)
 const rangeLoading = ref(false)
 const rangeError = ref('')
+
+// Results & Roots tab
+const resultsDate = ref(new Date().toISOString().slice(0, 10))
+const resultsData = ref<any>(null)
+const resultsLoading = ref(false)
+const resultsError = ref('')
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -508,6 +565,20 @@ async function loadRangePredictions() {
   } finally { rangeLoading.value = false }
 }
 
+async function loadResultsRoots() {
+  resultsLoading.value = true; resultsError.value = ''
+  try {
+    const params: any = {}
+    if (resultsDate.value) params.date = resultsDate.value
+    const res = await api.get('/api/digital-root-turbo/daily', { params })
+    if (res.data.error) { resultsError.value = res.data.error; resultsData.value = null }
+    else resultsData.value = res.data
+  } catch (e: any) {
+    resultsError.value = e.response?.data?.error || e.message
+    resultsData.value = null
+  } finally { resultsLoading.value = false }
+}
+
 onMounted(() => {
   loadDailyPredictions()
   loadRangePredictions()
@@ -581,4 +652,20 @@ function exportRangeExcel() {
   padding: 6px 14px; font-weight: 700; cursor: pointer; font-size: 12px;
 }
 .csv-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Root ball styles */
+.num-ball.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  margin: 2px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
 </style>

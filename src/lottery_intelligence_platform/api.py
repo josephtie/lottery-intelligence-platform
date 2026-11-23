@@ -1725,7 +1725,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "draw_id": str(draw_id),
                     "draw_type": display_name,
                     "draw_type_code": code,
-                    "scheduled_date": str(scheduled_date),
+                    "scheduled_date": str(target_date),  # Use target_date instead of scheduled_date
                     "status": status,
                     "validation_status": validation_status,
                     "actual_numbers": actual_numbers,
@@ -2434,6 +2434,214 @@ class ApiHandler(BaseHTTPRequestHandler):
             ]
         }
 
+    def _reduced_field(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Generate reduced field tickets based on mathematical analysis."""
+        from lottery_intelligence_platform.reduced_field import ReducedFieldGenerator
+        
+        draw_type = (qs.get("draw_type") or [None])[0]
+        with_turbo = (qs.get("with_turbo") or ["false"])[0].lower() == "true"
+        max_draws = int((qs.get("max_draws") or ["10"])[0])
+        # Validate: only 10 or 22 draws allowed (1 or 2 days)
+        if max_draws not in [10, 22]:
+            return {"error": "max_draws must be 10 or 22"}
+        
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    "SELECT draw_type_id, display_name FROM catalog.draw_types "
+                    "WHERE code = %s OR display_name = %s",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    "SELECT dt.draw_type_id, dt.display_name FROM catalog.draw_types dt "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = dt.draw_type_id) DESC LIMIT 1",
+                ).fetchone()
+            
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            
+            draw_type_id, display_name = dt
+            
+            # Get recent draws
+            rows = conn.execute(
+                """SELECT d.scheduled_date, d.scheduled_sequence, n.number
+                   FROM core.draws d
+                   JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                   WHERE d.draw_type_id = %s AND d.status = 'SETTLED'
+                   ORDER BY d.scheduled_date DESC, d.scheduled_sequence DESC, n.position
+                   LIMIT %s""",
+                (draw_type_id, max_draws * 5),  # 5 numbers per draw
+            ).fetchall()
+        
+        # Group by draw
+        draws_dict = {}
+        for scheduled_date, sequence, number in rows:
+            key = (scheduled_date, sequence)
+            if key not in draws_dict:
+                draws_dict[key] = []
+            draws_dict[key].append(number)
+        
+        # Take most recent draws
+        recent_draws = list(draws_dict.values())[:max_draws]
+        recent_draws.reverse()  # Oldest to newest
+        
+        # Generate reduced field tickets
+        generator = ReducedFieldGenerator(min_observations=5)
+        for draw in recent_draws:
+            generator.add_draw(draw)
+        
+        tickets = generator.generate_reduced_field_tickets(with_turbo=with_turbo)
+        report = generator.get_analysis_report()
+        
+        return {
+            "draw_type": display_name,
+            "draws_analyzed": len(recent_draws),
+            "with_turbo": with_turbo,
+            "analysis": report,
+            "tickets": [
+                {
+                    "strategy": t.strategy,
+                    "base": t.base,
+                    "base_root": t.base_root,
+                    "base_family": t.base_family,
+                    "associated": t.associated,
+                    "associated_roots": t.associated_roots,
+                    "associated_families": t.associated_families,
+                    "third_position": t.third_position,
+                    "third_roots": t.third_roots,
+                    "confidence": t.confidence,
+                }
+                for t in tickets
+            ],
+        }
+
+    def _daily_played_numbers(self, qs: dict[str, list[str]]) -> dict[str, Any]:
+        """Get numbers played for a specific date and draw type."""
+        date = (qs.get("date") or [None])[0]
+        draw_type = (qs.get("draw_type") or [None])[0]
+        
+        if not date or not draw_type:
+            return {"error": "date and draw_type required"}
+        
+        try:
+            from datetime import date as _date
+            _date.fromisoformat(date)
+        except ValueError:
+            return {"error": "date must be YYYY-MM-DD"}
+        
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            if draw_type:
+                dt = conn.execute(
+                    "SELECT draw_type_id, display_name FROM catalog.draw_types "
+                    "WHERE code = %s OR display_name = %s",
+                    (draw_type, draw_type),
+                ).fetchone()
+            else:
+                dt = conn.execute(
+                    "SELECT dt.draw_type_id, dt.display_name FROM catalog.draw_types dt "
+                    "ORDER BY (SELECT count(*) FROM core.draws d "
+                    "WHERE d.draw_type_id = dt.draw_type_id) DESC LIMIT 1",
+                ).fetchone()
+            
+            if dt is None:
+                return {"error": f"unknown draw_type: {draw_type}"}
+            
+            draw_type_id, display_name = dt
+            
+            # Get all draws for this date and draw type
+            rows = conn.execute(
+                """SELECT d.scheduled_date, d.scheduled_sequence, d.status, n.number
+                   FROM core.draws d
+                   JOIN core.draw_versions v ON v.draw_id = d.draw_id AND v.validation_status = 'VALID'
+                   JOIN core.draw_numbers n ON n.draw_version_id = v.draw_version_id AND n.number_role = 'WINNING'
+                   WHERE d.draw_type_id = %s AND d.scheduled_date = %s
+                   ORDER BY d.scheduled_sequence, n.position""",
+                (draw_type_id, date),
+            ).fetchall()
+        
+        # Group by draw
+        draws_dict = {}
+        for scheduled_date, sequence, status, number in rows:
+            key = (scheduled_date, sequence)
+            if key not in draws_dict:
+                draws_dict[key] = {"status": status, "numbers": [], "draw_type": draw_type}
+            draws_dict[key]["numbers"].append(number)
+        
+        # Get all played numbers for the day
+        played_numbers = set()
+        for draw in draws_dict.values():
+            played_numbers.update(draw["numbers"])
+        
+        # Get numbers played between 3h and 23h based on draw type name
+        played_numbers_3h_23h = set()
+        draw_type_lower = display_name.lower()
+        
+        # Extract hour from draw type name (e.g., "Digital 21h" -> 21)
+        import re
+        hour_match = re.search(r'(\d+)h', draw_type_lower)
+        draw_hour = int(hour_match.group(1)) if hour_match else None
+        
+        # Check if draw is in 3h-23h window
+        in_time_window = False
+        if draw_hour is not None:
+            in_time_window = 3 <= draw_hour <= 23
+        else:
+            # For draws without explicit hour, check common patterns
+            if any(keyword in draw_type_lower for keyword in ['matinale', 'reveil', 'premiere', '1h', '3h']):
+                in_time_window = True  # Early morning draws
+            elif any(keyword in draw_type_lower for keyword in ['21h', '22h', '23h', 'digital', 'soir', 'nuit']):
+                in_time_window = True  # Evening draws
+        
+        if in_time_window:
+            for draw in draws_dict.values():
+                played_numbers_3h_23h.update(draw["numbers"])
+        
+        # Group played numbers by root
+        from lottery_intelligence_platform.digital_root import digital_root
+        played_by_root = {}
+        for num in played_numbers:
+            root = digital_root(num)
+            if root not in played_by_root:
+                played_by_root[root] = []
+            played_by_root[root].append(num)
+        
+        # Group 3h-23h played numbers by root
+        played_by_root_3h_23h = {}
+        for num in played_numbers_3h_23h:
+            root = digital_root(num)
+            if root not in played_by_root_3h_23h:
+                played_by_root_3h_23h[root] = []
+            played_by_root_3h_23h[root].append(num)
+        
+        # Get all draws for this date and draw type with roots
+        all_draws = []
+        for k, v in draws_dict.items():
+            numbers = v["numbers"]
+            roots = [digital_root(n) for n in numbers]
+            all_draws.append({
+                "sequence": k[1],
+                "status": v["status"],
+                "numbers": numbers,
+                "roots": roots,
+                "draw_type": v["draw_type"]
+            })
+        
+        return {
+            "date": date,
+            "draw_type": display_name,
+            "total_draws": len(draws_dict),
+            "played_numbers": sorted(list(played_numbers)),
+            "played_numbers_3h_23h": sorted(list(played_numbers_3h_23h)),
+            "played_by_root": played_by_root,
+            "played_by_root_3h_23h": played_by_root_3h_23h,
+            "in_time_window": in_time_window,
+            "draw_hour": draw_hour,
+            "draws": all_draws
+        }
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         url = urlparse(self.path)
         if not url.path.startswith("/api"):
@@ -2585,6 +2793,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             if url.path == "/api/lab/draws-by-date":
                 self._send(self._draws_by_date(parse_qs(url.query)))
+                return
+            if url.path == "/api/reduced-field":
+                self._send(self._reduced_field(parse_qs(url.query)))
+                return
+            if url.path == "/api/daily-played-numbers":
+                self._send(self._daily_played_numbers(parse_qs(url.query)))
                 return
             sql = ROUTES.get(url.path)
             if sql is None:

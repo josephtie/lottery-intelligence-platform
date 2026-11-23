@@ -11,6 +11,7 @@ import Statistics from './views/Statistics.vue'
 import Ops from './views/Ops.vue'
 import Agents from './views/Agents.vue'
 import FusionAgents from './views/FusionAgents.vue'
+import ReducedField from './views/ReducedField.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -28,6 +29,7 @@ const router = createRouter({
     { path: '/ops', name: 'Ops', component: Ops, meta: { title: 'Opérations' } },
     { path: '/agents', name: 'Agents', component: Agents, meta: { title: 'Parieurs' } },
     { path: '/fusion-agents', name: 'FusionAgents', component: FusionAgents, meta: { title: 'Parieurs — Fusion' } },
+    { path: '/reduced-field', name: 'ReducedField', component: ReducedField, meta: { title: 'Champs Réduits' } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
