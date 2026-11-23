@@ -1,0 +1,9 @@
+# VPS-local override: no reverse proxy on this host, so the
+# read-only API + console must bind publicly. All /api/* routes require the
+# Bearer token (LOTTERY_API_TOKEN); the console itself prompts for it.
+# !override replaces the base 127.0.0.1 binding entirely (otherwise the
+# port list would merge and self-conflict).
+services:
+  api:
+    ports: !override
+      - "${LOTTERY_API_PORT:-8090}:8090"
